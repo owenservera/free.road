@@ -1,0 +1,20 @@
+sponsor_recipient:
+  name: "Owen ALEXANDER Wallace-servera"
+  github_username: "owen"
+  email: "owen@backboneintelligence.com"
+payout:
+  method: "bank_transfer"
+  account_type: "checking"
+  bank:
+    name: "Community Federal Savings Bank"
+    address: "89-16 Jamaica Ave, Woodhaven, NY, 11421, United States"
+    routing_number: "026073150"
+    account_number: "822000485554"
+    swift_bic: "CMFGUS33"
+  supported_transfers:
+    - domestic_ach: true
+    - international_wire: true
+verification:
+  status: pending
+  micro_deposit: true
+
