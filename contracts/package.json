@@ -1,0 +1,22 @@
+{
+  "name": "finallica-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Finallica governance and consensus",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js --network localhost"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "ethers": "^6.9.0",
+    "hardhat": "^2.19.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "chai": "^4.3.10",
+    "hardhat-gas-reporter": "^1.0.8"
+  }
+}

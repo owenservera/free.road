@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finallica Documentation System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">
+                    <span class="logo-icon">◈</span>
+                    Finallica
+                    <span class="logo-subtitle">Documentation System</span>
+                </h1>
+                <div class="header-actions">
+                    <button id="connectWallet" class="btn btn-primary">
+                        <span class="btn-icon">⚡</span>
+                        Connect Wallet
+                    </button>
+                    <div id="walletInfo" class="wallet-info hidden">
+                        <span class="wallet-address"></span>
+                        <span class="wallet-balance"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="main-container">
+            <!-- Sidebar - Document Tree -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Documentation</h3>
+                    <button id="refreshDocs" class="btn-icon" title="Refresh">↻</button>
+                </div>
+                <nav id="docTree" class="doc-tree">
+                    <!-- Dynamically populated -->
+                </nav>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="main-content">
+                <!-- Document Viewer -->
+                <div id="documentViewer" class="document-viewer">
+                    <div class="doc-toolbar">
+                        <div class="doc-breadcrumbs">
+                            <span class="breadcrumb-item">docs</span>
+                            <span class="breadcrumb-separator">/</span>
+                            <span class="breadcrumb-item">finallica</span>
+                            <span class="breadcrumb-separator">/</span>
+                            <span id="currentDoc" class="breadcrumb-item active">README.md</span>
+                        </div>
+                        <div class="doc-actions">
+                            <button id="editDoc" class="btn btn-secondary">
+                                <span class="btn-icon">✎</span>
+                                Edit
+                            </button>
+                            <button id="proposeChange" class="btn btn-primary">
+                                <span class="btn-icon">⤧</span>
+                                Propose Change
+                            </button>
+                            <button id="viewHistory" class="btn btn-secondary">
+                                <span class="btn-icon">◷</span>
+                                History
+                            </button>
+                        </div>
+                    </div>
+                    <div id="docContent" class="doc-content">
+                        <!-- Document content rendered here -->
+                    </div>
+                </div>
+
+                <!-- Editor Panel (Hidden by default) -->
+                <div id="editorPanel" class="editor-panel hidden">
+                    <div class="editor-toolbar">
+                        <h3 id="editorTitle">Edit Document</h3>
+                        <div class="editor-actions">
+                            <button id="previewChanges" class="btn btn-secondary">Preview</button>
+                            <button id="saveEdit" class="btn btn-primary">Save</button>
+                            <button id="cancelEdit" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </div>
+                    <textarea id="docEditor" class="doc-editor" spellcheck="false"></textarea>
+                    <div id="editPreview" class="edit-preview hidden"></div>
+                </div>
+
+                <!-- Proposals Panel -->
+                <div id="proposalsPanel" class="proposals-panel hidden">
+                    <div class="panel-header">
+                        <h3>Active Proposals</h3>
+                        <button id="newProposal" class="btn btn-primary">+ New Proposal</button>
+                    </div>
+                    <div id="proposalsList" class="proposals-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- Consensus View -->
+                <div id="consensusPanel" class="consensus-panel hidden">
+                    <div class="panel-header">
+                        <h3>Consensus State</h3>
+                        <div class="consensus-stats">
+                            <span class="stat">Block: <span id="currentBlock">0</span></span>
+                            <span class="stat">Epoch: <span id="currentEpoch">0</span></span>
+                            <span class="stat">Votes: <span id="totalVotes">0</span></span>
+                        </div>
+                    </div>
+                    <div id="consensusContent" class="consensus-content">
+                        <!-- Consensus data rendered here -->
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Panel - AI Chat & Voting -->
+            <aside class="right-panel">
+                <!-- Tab Navigation -->
+                <div class="tab-navigation">
+                    <button class="tab-btn active" data-tab="ai-chat">
+                        <span class="tab-icon">🤖</span>
+                        AI Chat
+                    </button>
+                    <button class="tab-btn" data-tab="proposals">
+                        <span class="tab-icon">⚖️</span>
+                        Proposals
+                        <span id="pendingCount" class="badge">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="consensus">
+                        <span class="tab-icon">⛓️</span>
+                        Consensus
+                    </button>
+                    <button class="tab-btn" data-tab="activity">
+                        <span class="tab-icon">▣</span>
+                        Activity
+                    </button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="tab-content">
+                    <!-- AI Chat Tab -->
+                    <div id="ai-chat" class="tab-pane active">
+                        <div id="chatMessages" class="chat-messages">
+                            <div class="chat-message system">
+                                <div class="message-content">
+                                    Welcome to Finallica AI Assistant. Ask questions about the architecture, protocol, or any aspect of the system.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input-container">
+                            <textarea id="chatInput" class="chat-input" placeholder="Ask about Finallica..." rows="3"></textarea>
+                            <div class="chat-actions">
+                                <button id="sendChat" class="btn btn-primary">Send</button>
+                                <button id="clearChat" class="btn btn-secondary">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Proposals Tab -->
+                    <div id="proposals" class="tab-pane">
+                        <div id="proposalsSummary" class="proposals-summary">
+                            <!-- Summary cards -->
+                        </div>
+                        <div id="proposalsDetail" class="proposals-detail">
+                            <!-- Detailed list -->
+                        </div>
+                    </div>
+
+                    <!-- Consensus Tab -->
+                    <div id="consensus" class="tab-pane">
+                        <div class="consensus-overview">
+                            <div class="consensus-metric">
+                                <span class="metric-label">Total Stake</span>
+                                <span class="metric-value" id="totalStake">0 BLF</span>
+                            </div>
+                            <div class="consensus-metric">
+                                <span class="metric-label">Quorum</span>
+                                <span class="metric-value" id="quorumStatus">Not Reached</span>
+                            </div>
+                            <div class="consensus-metric">
+                                <span class="metric-label">Approval Rate</span>
+                                <span class="metric-value" id="approvalRate">0%</span>
+                            </div>
+                        </div>
+                        <div id="consensusList" class="consensus-list">
+                            <!-- Voting items -->
+                        </div>
+                    </div>
+
+                    <!-- Activity Tab -->
+                    <div id="activity" class="tab-pane">
+                        <div id="activityFeed" class="activity-feed">
+                            <!-- Activity timeline -->
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Proposal Modal -->
+    <div id="proposalModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Proposal</h2>
+                <button id="closeModal" class="btn-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="proposalForm">
+                    <div class="form-group">
+                        <label for="proposalTitle">Title</label>
+                        <input type="text" id="proposalTitle" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="proposalType">Type</label>
+                        <select id="proposalType" class="form-control">
+                            <option value="document_edit">Document Edit</option>
+                            <option value="new_section">New Section</option>
+                            <option value="protocol_change">Protocol Change</option>
+                            <option value="parameter_update">Parameter Update</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="proposalDoc">Document</label>
+                        <select id="proposalDoc" class="form-control">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="proposalDiff">Changes (Diff Format)</label>
+                        <textarea id="proposalDiff" class="form-control" rows="10" placeholder="--- a/file.md&#10;+++ b/file.md&#10;@@ -1,1 +1,2 @@&#10;- old line&#10;+ new line"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="proposalRationale">Rationale</label>
+                        <textarea id="proposalRationale" class="form-control" rows="4" placeholder="Explain why this change should be made..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="proposalStake">Stake Amount (BLF)</label>
+                        <input type="number" id="proposalStake" class="form-control" min="1000" value="1000" required>
+                        <small class="form-text">Minimum 1000 BLF stake required. This stake is locked until proposal is resolved.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="submitProposal" class="btn btn-primary">Submit Proposal</button>
+                <button id="cancelProposal" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voting Modal -->
+    <div id="votingModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Vote on Proposal</h2>
+                <button id="closeVotingModal" class="btn-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="votingProposalDetails" class="voting-details">
+                    <!-- Proposal details -->
+                </div>
+                <div class="voting-options">
+                    <button id="voteFor" class="btn btn-success btn-large">
+                        <span class="btn-icon">✔</span>
+                        Vote For
+                    </button>
+                    <button id="voteAgainst" class="btn btn-danger btn-large">
+                        <span class="btn-icon">✖</span>
+                        Vote Against
+                    </button>
+                    <button id="voteAbstain" class="btn btn-secondary btn-large">
+                        <span class="btn-icon">⊝</span>
+                        Abstain
+                    </button>
+                </div>
+                <div class="voting-sliders">
+                    <div class="slider-group">
+                        <label>Stake Weight: <span id="stakeWeightValue">100</span>%</label>
+                        <input type="range" id="stakeWeight" min="1" max="100" value="100">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+</body>
+</html>
