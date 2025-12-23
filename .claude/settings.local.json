@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(where:*)",
+      "Bash(C:UsersVIVIM.incAppDataRoamingnpmbun.cmd --version)",
+      "Bash(bun --check:*)",
+      "Bash(\"C:\\\\Users\\\\VIVIM.inc\\\\AppData\\\\Roaming\\\\npm\\\\bun.cmd\" --check \"C:\\\\Users\\\\VIVIM.inc\\\\finallica-webapp\\\\engines\\\\Engine.js\")"
     ]
   }
 }

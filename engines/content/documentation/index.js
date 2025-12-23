@@ -1,7 +1,10 @@
 const { Module } = require('../../../Module');
 const DocIndexerService = require('./services/doc-indexer');
 const Context7Server = require('./services/context7-server');
+const MCPClient = require('./services/mcp-client');
+const MCPPassport = require('./services/mcp-passport');
 const createContext7Routes = require('./routes/context7');
+const createMCPRoutes = require('./routes/mcp');
 
 class DocumentationModule extends Module {
     constructor(options = {}) {
@@ -29,14 +32,20 @@ class DocumentationModule extends Module {
         const docPath = path.join(process.cwd(), '../docs/finallica');
         const context7Server = new Context7Server(docPath, db, docIndexer);
         this.addService('context7-server', context7Server);
+
+        const mcpPassport = new MCPPassport();
+        this.addService('mcp-passport', mcpPassport);
+
+        const mcpClient = new MCPClient(mcpPassport);
+        this.addService('mcp-client', mcpClient);
     }
 
     async _onStart() {
         const context7Server = this.getService('context7-server');
-
         await context7Server.initialize(31338);
 
         this.context7Routes = createContext7Routes(context7Server, this.getService('doc-indexer'));
+        this.mcpRoutes = createMCPRoutes(this.getService('mcp-passport'), this.getService('mcp-client'));
     }
 
     async _onStop() {
@@ -56,7 +65,7 @@ class DocumentationModule extends Module {
     }
 
     getRoutes() {
-        return this.context7Routes;
+        return { ...this.context7Routes, ...this.mcpRoutes };
     }
 }
 

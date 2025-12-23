@@ -6,9 +6,19 @@
 
 ### System Identification
 
-**Current System:** [Replace with system identifier - e.g., VIVIM-Dev-Workstation, VIVIM-Cloud-Prod, CI-Runner-1]
-**Deployment Type:** [Self-hosted, Cloud, Local, CI/CD]
-**Primary Development Environment:** [CLI, IDE, Web Interface, API]
+**Current System:** VIVIM-Dev-Workstation
+**Deployment Type:** Local Development
+**Primary Development Environment:** CLI
+
+### System-Specific Paths (LOCKED - DO NOT EDIT)
+
+**Bun Executable Path:** `C:/Users/VIVIM.inc/.bun/bin/bun.exe`
+**Bun Version:** 1.3.4
+
+> **CRITICAL:** Always use the full path when running bun in this environment:
+> ```bash
+> "C:/Users/VIVIM.inc/.bun/bin/bun.exe" run <script>
+> ```
 
 ### Core AI Editor Settings
 
@@ -68,15 +78,19 @@ When building features, ask: "How would a contributor extend this? How would a c
 
 **IMPORTANT: This project uses Bun only.** Do not use npm or yarn.
 
+**For VIVIM-Dev-Workstation**, use the full path:
 ```bash
 # Install dependencies
-bun install
+"C:/Users/VIVIM.inc/.bun/bin/bun.exe" install
 
 # Start backend server
-bun run backend/server.js
+"C:/Users/VIVIM.inc/.bun/bin/bun.exe" run backend/server.js
+
+# Start main server
+"C:/Users/VIVIM.inc/.bun/bin/bun.exe" run server-new.js
 
 # Install new package
-bun add <package-name>
+"C:/Users/VIVIM.inc/.bun/bin/bun.exe" add <package-name>
 ```
 
 ## Project Overview

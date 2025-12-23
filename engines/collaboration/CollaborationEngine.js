@@ -1,5 +1,9 @@
 const Engine = require('../Engine');
+const SharingModule = require('./sharing/index');
 
+/**
+ * Collaboration Engine - Manages sharing and commands
+ */
 class CollaborationEngine extends Engine {
     constructor(options = {}) {
         super({
@@ -11,9 +15,52 @@ class CollaborationEngine extends Engine {
         });
     }
 
-    async initialize(context = {}) {
-        await super.initialize(context);
-        console.log('🤝 Collaboration Engine initialized');
+    /**
+     * Get engine type
+     * @returns {string}
+     */
+    getEngineType() {
+        return 'collaboration';
+    }
+
+    /**
+     * Setup engine configuration and register modules
+     * @private
+     */
+    async _setupConfiguration() {
+        // Register Sharing module
+        const sharingModule = new SharingModule(this.config.sharing || {});
+        await this.registerModule(sharingModule);
+    }
+
+    /**
+     * Handle events from other engines
+     * @param {Object} event - Event object
+     */
+    async onEvent(event) {
+        switch (event.type) {
+            case 'session:completed':
+                // Auto-share session based on user preferences
+                const sharingModule = this.getModule('sharing');
+                if (sharingModule && sharingModule.getService) {
+                    const shareService = sharingModule.getService('share');
+                    if (shareService && shareService.autoShare) {
+                        await shareService.autoShare(event.data.sessionId);
+                    }
+                }
+                break;
+            case 'command:registered':
+                // Notify about new commands
+                if (sharingModule && sharingModule.getService) {
+                    const commands = sharingModule.getService('commands');
+                    if (commands && commands.notify) {
+                        await commands.notify(event.data);
+                    }
+                }
+                break;
+            default:
+                await super.onEvent(event);
+        }
     }
 
     async _startServices() {

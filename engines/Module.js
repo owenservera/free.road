@@ -269,7 +269,7 @@ class Module extends ModuleInterface {
      * Stop module-specific logic (to be implemented by subclasses)
      * @private
      */
-    async _ onStop() {
+    async _onStop() {
         // Override in subclasses
     }
 

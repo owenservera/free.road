@@ -1,5 +1,5 @@
 // Finallica Server - Engine-based Architecture
-// New server using modular engine system
+// Complete modular engine system
 
 require('dotenv').config();
 
@@ -7,9 +7,15 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const WebSocket = require('ws');
+
+// Import all engines
 const { PlatformEngine } = require('./engines/PlatformEngine');
-const { InfrastructureModule } = require('./engines/platform/infrastructure/index');
-const { RepositoryModule } = require('./engines/platform/repository/index');
+const { ContentEngine } = require('./engines/content/ContentEngine');
+const { AgentEngine } = require('./engines/agents/AgentEngine');
+const { CollaborationEngine } = require('./engines/collaboration/CollaborationEngine');
+const { GovernanceEngine } = require('./engines/governance/GovernanceEngine');
+
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,36 +26,35 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Legacy backend imports (to be migrated to modules)
-const db = require('./backend/database');
-const AIProviderService = require('./backend/services/ai-provider-service');
-const StreamingService = require('./backend/services/streaming-service');
-const createAIRoutes = require('./backend/routes/ai');
-const Context7Server = require('./backend/services/context7-server');
-const createContext7Routes = require('./backend/routes/context7');
-const DocIndexer = require('./backend/services/doc-indexer');
-const RepoSuggesterService = require('./backend/services/repo-suggester');
-const createSuggestionRoutes = require('./backend/routes/suggestions');
-const ShareService = require('./backend/services/share-service');
-const CommandRegistry = require('./backend/services/command-registry');
-const createShareRoutes = require('./backend/routes/share');
-const createCommandRoutes = require('./backend/routes/commands');
-const PrivacyService = require('./backend/services/privacy-service');
-const MCPClient = require('./backend/services/mcp-client');
-const MCPPassport = require('./backend/services/mcp-passport');
-const createMCPRoutes = require('./backend/routes/mcp');
-const APIKeyPool = require('./backend/services/api-key-pool');
-const BudgetManager = require('./backend/services/budget-manager');
-const AgentFleetService = require('./backend/services/agent-fleet-service');
-const AgentScheduler = require('./backend/services/agent-scheduler');
+// Store engines globally for access across modules
+global.engines = {};
 
 // ============================================
-// PLATFORM ENGINE INITIALIZATION
+// DATABASE INITIALIZATION
 // ============================================
 
-async function initializePlatform() {
-    console.log('🚀 Initializing Platform Engine...');
+async function initializeDatabase() {
+    const db = require('./backend/database');
+    try {
+        await db.initialize();
+        console.log('✅ Database initialized');
+        await db.runMigrations();
+        console.log('✅ Database migrations completed');
+        return db;
+    } catch (error) {
+        console.error('❌ Failed to initialize database:', error);
+        throw error;
+    }
+}
 
+// ============================================
+// ENGINES INITIALIZATION
+// ============================================
+
+async function initializeEngines(db) {
+    console.log('🚀 Initializing Finallica Engines...');
+
+    // 1. Platform Engine - Core infrastructure
     const platformEngine = new PlatformEngine({
         config: {
             infrastructure: {
@@ -69,154 +74,190 @@ async function initializePlatform() {
             }
         }
     });
-
-    await platformEngine.initialize({
-        database: db,
-        logger: console
-    });
-
+    await platformEngine.initialize({ database: db, logger: console });
     await platformEngine.start();
+    global.engines.platform = platformEngine;
+    console.log('✅ Platform Engine initialized');
 
-    console.log('✅ Platform Engine running');
-
-    // Register modules
-    const infrastructureModule = new InfrastructureModule(platformEngine.config.infrastructure);
-    await infrastructureModule.initialize(platformEngine._createModuleContext(infrastructureModule));
-    await platformEngine.registerModule(infrastructureModule);
-
-    const repositoryModule = new RepositoryModule({});
-    await repositoryModule.initialize(platformEngine._createModuleContext(repositoryModule));
-    await platformEngine.registerModule(repositoryModule);
-
-    // Start modules
-    await infrastructureModule.start();
-    await repositoryModule.start();
-
-    console.log('✅ All modules started');
-
-    return { platformEngine, infrastructureModule, repositoryModule };
-}
-
-// ============================================
-// LEGACY SYSTEMS INITIALIZATION
-// ============================================
-
-async function initializeLegacySystems() {
-    try {
-        await db.initialize();
-        console.log('✅ Database initialized');
-
-        await db.runMigrations();
-        console.log('✅ Database migrations completed');
-    } catch (error) {
-        console.error('❌ Failed to initialize database:', error);
-    }
-
-    if (process.env.AGENT_FLEET_ENABLED === 'true') {
-        try {
-            const apiKeyPool = new APIKeyPool(db);
-            await apiKeyPool.initialize();
-
-            const budgetManager = new BudgetManager(db, apiKeyPool);
-            await budgetManager.initialize();
-
-            const agentFleet = new AgentFleetService(db, apiKeyPool, budgetManager);
-            const projectPath = process.cwd();
-            await agentFleet.initialize(projectPath);
-
-            const scheduler = new AgentScheduler(db, apiKeyPool, budgetManager, agentFleet, {
-                concurrency: parseInt(process.env.AGENT_CONCURRENT_LIMIT || '3'),
-                maxRetries: parseInt(process.env.AGENT_MAX_RETRIES || '3'),
-                pollingInterval: parseInt(process.env.AGENT_SCHEDULER_POLLING_INTERVAL || '5000')
-            });
-
-            if (process.env.AGENT_FLEET_AUTO_START === 'true') {
-                await agentFleet.start();
-                await scheduler.start();
+    // 2. Content Engine - Documentation and search
+    const contentEngine = new ContentEngine({
+        config: {
+            documentation: {
+                docPath: path.join(process.cwd(), '../docs/finallica'),
+                context7Port: 31338
+            },
+            search: {
+                enabled: true
             }
-
-            console.log('✅ Agent Fleet System initialized');
-        } catch (error) {
-            console.error('❌ Failed to initialize Agent Fleet:', error);
         }
+    });
+    await contentEngine.initialize({ database: db, logger: console });
+    await contentEngine.start();
+    global.engines.content = contentEngine;
+    console.log('✅ Content Engine initialized');
+
+    // 3. Agent Engine - AI agent fleet
+    if (process.env.AGENT_FLEET_ENABLED === 'true') {
+        const agentEngine = new AgentEngine({
+            config: {
+                fleet: {
+                    autoStart: process.env.AGENT_FLEET_AUTO_START === 'true',
+                    concurrency: parseInt(process.env.AGENT_CONCURRENT_LIMIT || '3'),
+                    maxRetries: parseInt(process.env.AGENT_MAX_RETRIES || '3'),
+                    pollingInterval: parseInt(process.env.AGENT_SCHEDULER_POLLING_INTERVAL || '5000')
+                }
+            }
+        });
+        await agentEngine.initialize({ database: db, logger: console });
+        await agentEngine.start();
+        global.engines.agents = agentEngine;
+        console.log('✅ Agent Engine initialized');
+    } else {
+        console.log('⏭️  Agent Engine disabled (AGENT_FLEET_ENABLED=false)');
     }
 
+    // 4. Collaboration Engine - Sharing and commands
+    const collaborationEngine = new CollaborationEngine({
+        config: {
+            sharing: {
+                enabled: true
+            }
+        }
+    });
+    await collaborationEngine.initialize({ database: db, logger: console });
+    await collaborationEngine.start();
+    global.engines.collaboration = collaborationEngine;
+    console.log('✅ Collaboration Engine initialized');
+
+    // 5. Governance Engine - Privacy and governance
     if (process.env.PRIVACY_ENABLED === 'true') {
-        try {
-            const privacyService = new PrivacyService(db);
-            await privacyService.initialize();
-            console.log('✅ Privacy Service initialized');
-        } catch (error) {
-            console.error('❌ Failed to initialize Privacy Service:', error);
-        }
+        const governanceEngine = new GovernanceEngine({
+            config: {
+                privacy: {
+                    rpcUrl: process.env.RPC_URL,
+                    privacyRouterAddress: process.env.PRIVACY_ROUTER_ADDRESS,
+                    relayerUrl: process.env.PRIVACY_RELAYER_URL
+                }
+            }
+        });
+        await governanceEngine.initialize({ database: db, logger: console });
+        await governanceEngine.start();
+        global.engines.governance = governanceEngine;
+        console.log('✅ Governance Engine initialized');
+    } else {
+        console.log('⏭️  Governance Engine disabled (PRIVACY_ENABLED=false)');
     }
+
+    console.log('✅ All engines initialized successfully');
+
+    return { platformEngine, contentEngine, agentEngine: global.engines.agents, collaborationEngine, governanceEngine: global.engines.governance };
 }
 
 // ============================================
 // ROUTE REGISTRATION
 // ============================================
 
-function registerRoutes(infrastructureModule, repositoryModule) {
-    // Mount repository module routes
-    const repositoryRoutes = repositoryModule.getRoutes();
-    app.use('/api/repositories', repositoryRoutes);
+function registerRoutes() {
+    // Platform Engine routes
+    const platformEngine = global.engines.platform;
+    if (platformEngine) {
+        const repositoryModule = platformEngine.getModule('repository');
+        if (repositoryModule) {
+            const repoRoutes = repositoryModule.getRoutes();
+            if (repoRoutes) {
+                app.use('/api/repositories', repoRoutes);
+            }
+            if (repositoryModule.getCollectionRoutes) {
+                const collectionRoutes = repositoryModule.getCollectionRoutes();
+                if (collectionRoutes) {
+                    app.use('/api/collections', collectionRoutes);
+                }
+            }
+        }
 
-    const collectionRoutes = repositoryModule.getCollectionRoutes();
-    app.use('/api/collections', collectionRoutes);
+        // Infrastructure routes
+        const infrastructureModule = platformEngine.getModule('infrastructure');
+        if (infrastructureModule && infrastructureModule.getRoutes) {
+            const infraRoutes = infrastructureModule.getRoutes();
+            if (infraRoutes) {
+                app.use('/api/infrastructure', infraRoutes);
+            }
+        }
+    }
 
-    // Health check
-    app.get('/health', (req, res) => {
-        res.json({
+    // Content Engine routes
+    const contentEngine = global.engines.content;
+    if (contentEngine) {
+        // Documentation module routes (Context7 + MCP)
+        const docModule = contentEngine.getModule('documentation');
+        if (docModule) {
+            const docRoutes = docModule.getRoutes();
+            if (docRoutes) {
+                app.use('/api/context7', docRoutes);
+            }
+        }
+
+        // Search module routes
+        const searchModule = contentEngine.getModule('search');
+        if (searchModule) {
+            const searchRoutes = searchModule.getRoutes();
+            if (searchRoutes) {
+                app.use('/api/suggestions', searchRoutes);
+            }
+        }
+    }
+
+    // Agent Engine routes
+    const agentEngine = global.engines.agents;
+    if (agentEngine) {
+        const fleetModule = agentEngine.getModule('fleet');
+        if (fleetModule) {
+            const agentRoutes = fleetModule.getRoutes();
+            if (agentRoutes) {
+                app.use('/api/ai', agentRoutes);
+            }
+        }
+    }
+
+    // Collaboration Engine routes
+    const collaborationEngine = global.engines.collaboration;
+    if (collaborationEngine) {
+        const sharingModule = collaborationEngine.getModule('sharing');
+        if (sharingModule) {
+            const shareRoutes = sharingModule.getRoutes();
+            if (shareRoutes) {
+                // The sharing module returns a combined router with both share and command routes
+                app.use('/api/share', shareRoutes);
+                app.use('/api/commands', shareRoutes);
+            }
+        }
+    }
+
+    // Health check endpoint
+    app.get('/health', async (req, res) => {
+        const health = {
             status: 'ok',
             timestamp: new Date().toISOString(),
-            engines: {
-                platform: 'running'
+            engines: {}
+        };
+
+        for (const [name, engine] of Object.entries(global.engines)) {
+            if (engine && engine.getHealth) {
+                try {
+                    const engineHealth = await engine.getHealth();
+                    health.engines[name] = {
+                        status: engineHealth.status || 'running',
+                        state: engineHealth.state || 'unknown',
+                        modules: engineHealth.modules ? Array.from(engineHealth.modules) : []
+                    };
+                } catch (error) {
+                    health.engines[name] = { status: 'error', message: error.message };
+                }
             }
-        });
-    });
-
-    // Agent Fleet routes (legacy)
-    app.get('/api/agent-fleet/status', (req, res) => {
-        const agentFleet = global.agentFleetService;
-        if (agentFleet) {
-            res.json(agentFleet.getStatus());
-        } else {
-            res.json({ status: 'not initialized' });
-        }
-    });
-
-    app.post('/api/agent-fleet/start', async (req, res) => {
-        const agentFleet = global.agentFleetService;
-        if (!agentFleet) {
-            return res.status(503).json({ error: 'Agent Fleet not initialized' });
         }
 
-        try {
-            const { agents } = req.body;
-            const result = await agentFleet.start(agents);
-            res.json(result);
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        res.json(health);
     });
-
-    // AI Chat routes (legacy)
-    app.use('/api/ai', createAIRoutes(AIProviderService, StreamingService, db));
-
-    // Context7 routes (legacy)
-    app.use('/api/context7', createContext7Routes(Context7Server, DocIndexer, db));
-
-    // Suggestions routes (legacy)
-    app.use('/api/suggestions', createSuggestionRoutes(RepoSuggesterService, db));
-
-    // Share routes (legacy)
-    app.use('/api/share', createShareRoutes(ShareService, db));
-
-    // Command routes (legacy)
-    app.use('/api/commands', createCommandRoutes(CommandRegistry, db));
-
-    // MCP routes (legacy)
-    app.use('/api/mcp', createMCPRoutes(MCPClient, MCPPassport, db));
 
     console.log('✅ All routes registered');
 }
@@ -262,13 +303,19 @@ function setupWebSocket(wss) {
 }
 
 function handleChatMessage(ws, message) {
-    const agentFleet = global.agentFleetService;
-    if (agentFleet && message.streamId) {
-        ws.send(JSON.stringify({
-            type: 'chat_response',
-            streamId: message.streamId,
-            content: message.content
-        }));
+    const agentEngine = global.engines.agents;
+    if (agentEngine) {
+        const fleetModule = agentEngine.getModule('fleet');
+        if (fleetModule) {
+            const streaming = fleetModule.getService('streaming');
+            if (streaming && message.streamId) {
+                ws.send(JSON.stringify({
+                    type: 'chat_response',
+                    streamId: message.streamId,
+                    content: message.content
+                }));
+            }
+        }
     }
 }
 
@@ -294,25 +341,30 @@ function handleAgentMessage(ws, message) {
 
 async function startServer() {
     try {
-        const { platformEngine, infrastructureModule, repositoryModule } = await initializePlatform();
+        // Initialize database first
+        const db = await initializeDatabase();
 
-        await initializeLegacySystems();
+        // Initialize all engines
+        await initializeEngines(db);
 
-        registerRoutes(infrastructureModule, repositoryModule);
+        // Register routes from all engines
+        registerRoutes();
 
+        // Setup WebSocket
         setupWebSocket(wss);
 
+        // Start server
         server.listen(PORT, () => {
             console.log('='.repeat(60));
             console.log('🚀 Finallica Server Started');
             console.log('='.repeat(60));
             console.log(`  Port: ${PORT}`);
             console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`  Engine: Platform`);
+            console.log(`  Engines: ${Object.keys(global.engines).join(', ')}`);
             console.log('='.repeat(60));
         });
 
-        return { server, platformEngine };
+        return { server, db };
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);
@@ -327,16 +379,21 @@ async function gracefulShutdown(signal) {
     console.log(`\n${signal} received. Shutting down gracefully...`);
 
     try {
-        const platformEngine = global.platformEngine;
-        if (platformEngine) {
-            await platformEngine.stop();
+        // Stop all engines
+        for (const [name, engine] of Object.entries(global.engines)) {
+            if (engine && engine.stop) {
+                console.log(`Stopping ${name} engine...`);
+                await engine.stop();
+            }
         }
 
+        // Close server
         server.close(() => {
             console.log('✅ Server closed');
             process.exit(0);
         });
 
+        // Force shutdown after timeout
         setTimeout(() => {
             console.error('❌ Forced shutdown');
             process.exit(1);
