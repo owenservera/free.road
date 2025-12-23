@@ -8,7 +8,12 @@
     "dev:backend": "cd backend && node server.js",
     "install:contracts": "cd contracts && npm install",
     "deploy:contracts": "cd contracts && npx hardhat compile",
-    "test": "cd backend && npm test"
+    "test": "cd backend && npm test",
+    "repomix": "repomix",
+    "repomix:code": "repomix --config .repomix.code.json",
+    "repomix:contracts": "repomix contracts/",
+    "repomix:frontend": "repomix frontend/",
+    "repomix:backend": "repomix backend/"
   },
   "dependencies": {
     "express": "^4.18.2",

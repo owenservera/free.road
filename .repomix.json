@@ -1,0 +1,34 @@
+{
+  "output": "repomix-output.txt",
+  "include": [
+    "frontend/**/*.{js,html,css,md}",
+    "backend/**/*.{js,json}",
+    "contracts/**/*.{sol,json,js}",
+    "docs/**/*.md",
+    "shared/**/*",
+    "package.json",
+    "README.md",
+    ".env.example"
+  ],
+  "ignore": [
+    "node_modules/**",
+    "**/node_modules/**",
+    ".git/**",
+    "*.lock",
+    "dist/**",
+    "build/**",
+    "artifacts/**",
+    "cache/**",
+    "coverage/**",
+    ".DS_Store",
+    "*.log"
+  ],
+  "style": {
+    "startToken": "=== FILE_START: {{filePath}} ===",
+    "endToken": "=== FILE_END: {{filePath}} ===",
+    "directoryStructure": true,
+    "topFilesLength": 50,
+    "removeComments": false,
+    "removeEmptyLines": false
+  }
+}

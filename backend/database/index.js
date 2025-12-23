@@ -646,4 +646,20 @@ class DatabaseManager {
 
     // ============================================
     // UTILITY
-   
+    // ============================================
+
+    getReposPath() {
+        return REPOS_DIR;
+    }
+
+    close() {
+        if (this.db) {
+            this.db.close();
+        }
+    }
+}
+
+// Singleton instance
+const db = new DatabaseManager();
+
+module.exports = db;

@@ -16,6 +16,9 @@ const GitSyncService = require('./services/git-sync');
 const RepositoryService = require('./services/repository-service');
 const createRepositoryRoutes = require('./routes/repositories');
 
+// Privacy Service
+const PrivacyService = require('./services/privacy-service');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -33,7 +36,12 @@ const CONFIG = {
     // AI Provider: 'claude' (Anthropic), 'openai', or 'demo'
     AI_PROVIDER: process.env.AI_PROVIDER || 'demo',
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    // Privacy Configuration
+    PRIVACY_ENABLED: process.env.PRIVACY_ENABLED === 'true',
+    PRIVACY_ROUTER_ADDRESS: process.env.PRIVACY_ROUTER_ADDRESS || '',
+    RPC_URL: process.env.RPC_URL || 'http://localhost:8545',
+    RELAYER_URL: process.env.RELAYER_URL || ''
 };
 
 // State
@@ -528,6 +536,193 @@ app.get('/api/ai/models', (req, res) => {
 app.get('/api/ai/stats', (req, res) => {
     res.json({ stats: keyManager.getStats(), availableProviders: keyManager.getAvailableProviders() });
 });
+
+// ============================================
+// PRIVACY ROUTES
+// ============================================
+
+// Initialize privacy service if enabled
+let privacyService = null;
+
+if (CONFIG.PRIVACY_ENABLED && CONFIG.RPC_URL) {
+    try {
+        privacyService = new PrivacyService({
+            rpcUrl: CONFIG.RPC_URL,
+            privacyRouterAddress: CONFIG.PRIVACY_ROUTER_ADDRESS,
+            relayerUrl: CONFIG.RELAYER_URL,
+            tornadoInstances: {
+                ETH_0_1: process.env.TORNADO_ETH_0_1,
+                ETH_1: process.env.TORNADO_ETH_1,
+                ETH_10: process.env.TORNADO_ETH_10,
+                ETH_100: process.env.TORNADO_ETH_100,
+                USDC_100: process.env.TORNADO_USDC_100,
+                BLF_100: process.env.TORNADO_BLF_100,
+                BLF_1000: process.env.TORNADO_BLF_1000
+            }
+        });
+        console.log('Privacy service initialized');
+    } catch (error) {
+        console.error('Failed to initialize privacy service:', error.message);
+    }
+}
+
+// Get privacy service status
+app.get('/api/privacy/status', (req, res) => {
+    res.json({
+        enabled: CONFIG.PRIVACY_ENABLED,
+        available: privacyService !== null,
+        routerAddress: CONFIG.PRIVACY_ROUTER_ADDRESS,
+        relayerUrl: CONFIG.RELAYER_URL || null
+    });
+});
+
+// Get available privacy pools
+app.get('/api/privacy/pools', async (req, res) => {
+    if (!privacyService) {
+        return res.status(503).json({ error: 'Privacy service not available' });
+    }
+
+    try {
+        const pools = await privacyService.getAvailablePools();
+        res.json({ pools });
+    } catch (error) {
+        console.error('Error fetching pools:', error);
+        res.status(500).json({ error: 'Failed to fetch pools' });
+    }
+});
+
+// Generate a privacy note
+app.post('/api/privacy/note', async (req, res) => {
+    if (!privacyService) {
+        return res.status(503).json({ error: 'Privacy service not available' });
+    }
+
+    try {
+        const { token, amount } = req.body;
+
+        if (!token || !amount) {
+            return res.status(400).json({ error: 'Token and amount are required' });
+        }
+
+        const note = await privacyService.generateNote(token, amount);
+
+        // Broadcast to connected clients
+        broadcast({
+            type: 'privacy_note_generated',
+            token,
+            amount,
+            poolId: note.poolId
+        });
+
+        res.json({ success: true, note });
+    } catch (error) {
+        console.error('Note generation error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Validate a privacy note
+app.post('/api/privacy/note/validate', async (req, res) => {
+    if (!privacyService) {
+        return res.status(503).json({ error: 'Privacy service not available' });
+    }
+
+    try {
+        const { note } = req.body;
+
+        if (!note) {
+            return res.status(400).json({ error: 'Note string is required' });
+        }
+
+        const isValid = privacyService.validateNote(note);
+        const parsed = privacyService.parseNote(note);
+
+        res.json({
+            success: true,
+            valid: isValid,
+            token: parsed.token,
+            amount: parsed.amount
+        });
+    } catch (error) {
+        res.json({ success: true, valid: false, error: error.message });
+    }
+});
+
+// Private deposit
+app.post('/api/privacy/deposit', async (req, res) => {
+    if (!privacyService) {
+        return res.status(503).json({ error: 'Privacy service not available' });
+    }
+
+    try {
+        const { note, privateKey, useRouter } = req.body;
+
+        if (!note) {
+            return res.status(400).json({ error: 'Note is required' });
+        }
+
+        // Parse the note if it's a string, otherwise use as-is
+        const noteData = typeof note === 'string'
+            ? { ...privacyService.parseNote(note), fullNote: note }
+            : note;
+
+        const result = await privacyService.deposit(
+            noteData,
+            privateKey,
+            { useRouter }
+        );
+
+        // Broadcast deposit event
+        broadcast({
+            type: 'privacy_deposit',
+            txHash: result.txHash,
+            poolId: noteData.poolId
+        });
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Deposit error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Calculate fees for privacy transaction
+app.get('/api/privacy/fees', async (req, res) => {
+    if (!privacyService) {
+        return res.status(503).json({ error: 'Privacy service not available' });
+    }
+
+    try {
+        const { token, amount } = req.query;
+
+        if (!token || !amount) {
+            return res.status(400).json({ error: 'Token and amount are required' });
+        }
+
+        const fees = privacyService.calculateFees(token, amount);
+        res.json({ success: true, fees });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get withdrawal status
+app.get('/api/privacy/withdrawal/:txHash', async (req, res) => {
+    if (!privacyService) {
+        return res.status(503).json({ error: 'Privacy service not available' });
+    }
+
+    try {
+        const status = await privacyService.getWithdrawalStatus(req.params.txHash);
+        res.json({ success: true, status });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// AI CHAT FUNCTIONS
+// ============================================
 
 function buildSystemPrompt() {
     const docList = Object.keys(state.documents).map(d => `- ${d}`).join('\n');

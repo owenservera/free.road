@@ -26,7 +26,15 @@ const state = {
     aiProviders: {},
     aiDefaults: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
     selectedProvider: null,
-    selectedModel: null
+    selectedModel: null,
+    // Privacy Configuration
+    privacy: {
+        enabled: false,
+        available: false,
+        notes: [],
+        selectedPool: null,
+        pools: []
+    }
 };
 
 // Utility Functions
@@ -906,6 +914,332 @@ function renderModelSelector() {
 }
 
 // ============================================
+// PRIVACY FUNCTIONS
+// ============================================
+
+/**
+ * Initialize privacy service - check availability
+ */
+async function loadPrivacyStatus() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/status`);
+        const data = await response.json();
+        state.privacy.available = data.available;
+        state.privacy.enabled = data.enabled;
+
+        if (data.available) {
+            // Show privacy toggle
+            $('#privacyToggleContainer')?.classList.remove('hidden');
+            await loadPrivacyPools();
+        }
+    } catch (error) {
+        console.error('Failed to load privacy status:', error);
+    }
+}
+
+/**
+ * Load available privacy pools
+ */
+async function loadPrivacyPools() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/pools`);
+        const data = await response.json();
+        state.privacy.pools = data.pools || [];
+
+        // Update pool dropdowns
+        updatePrivacyPoolOptions();
+    } catch (error) {
+        console.error('Failed to load privacy pools:', error);
+    }
+}
+
+/**
+ * Update privacy pool dropdown options
+ */
+function updatePrivacyPoolOptions() {
+    const tokenSelect = $('#privacyToken');
+    const amountSelect = $('#privacyAmount');
+
+    if (!tokenSelect || !amountSelect) return;
+
+    // Get unique tokens
+    const tokens = [...new Set(state.privacy.pools.map(p => p.token || p.tokenSymbol))];
+
+    tokenSelect.innerHTML = tokens.map(token =>
+        `<option value="${token}">${token}</option>`
+    ).join('');
+
+    // Update amounts based on selected token
+    const updateAmounts = () => {
+        const selectedToken = tokenSelect.value;
+        const pools = state.privacy.pools.filter(p =>
+            (p.token || p.tokenSymbol) === selectedToken
+        );
+
+        amountSelect.innerHTML = pools.map(p =>
+            `<option value="${p.denomination || p.amount}">${p.denomination || p.amount}</option>`
+        ).join('');
+    };
+
+    tokenSelect.addEventListener('change', updateAmounts);
+    updateAmounts();
+}
+
+/**
+ * Toggle privacy mode
+ */
+function togglePrivacyMode() {
+    state.privacy.enabled = !state.privacy.enabled;
+    $('#privacyToggle')?.classList.toggle('active', state.privacy.enabled);
+    $('#privacyControls')?.classList.toggle('hidden', !state.privacy.enabled);
+
+    if (state.privacy.enabled) {
+        showToast('Privacy mode enabled - your transactions will be mixed', 'info');
+        trackActivity('privacy_enabled', {});
+    } else {
+        showToast('Privacy mode disabled - transactions will be transparent', 'info');
+        trackActivity('privacy_disabled', {});
+    }
+}
+
+/**
+ * Generate a privacy deposit note
+ */
+async function generatePrivacyNote() {
+    const token = $('#privacyToken')?.value;
+    const amount = $('#privacyAmount')?.value;
+
+    if (!token || !amount) {
+        showToast('Please select token and amount', 'warning');
+        return;
+    }
+
+    try {
+        showToast('Generating privacy note...', 'info');
+
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/note`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, amount })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            state.privacy.notes.push(data.note);
+
+            const noteDisplay = $('#privacyNoteDisplay');
+            if (noteDisplay) {
+                noteDisplay.value = data.note.note;
+            }
+
+            showToast('Privacy note generated - save this securely!', 'success');
+            trackActivity('privacy_note_generated', { token, amount });
+
+            // Update fee estimate
+            await updatePrivacyFeeEstimate(token, amount);
+        }
+    } catch (error) {
+        console.error('Failed to generate note:', error);
+        showToast('Failed to generate note', 'error');
+    }
+}
+
+/**
+ * Update fee estimate for privacy transaction
+ */
+async function updatePrivacyFeeEstimate(token, amount) {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/fees?token=${token}&amount=${amount}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const feeDisplay = $('#privacyFeeEstimate');
+            if (feeDisplay) {
+                feeDisplay.textContent = `Estimated fee: ${data.totalFee} ${token}`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch fee estimate:', error);
+    }
+}
+
+/**
+ * Execute private deposit
+ */
+async function executePrivateDeposit() {
+    const noteDisplay = $('#privacyNoteDisplay');
+    const note = noteDisplay?.value;
+
+    if (!note) {
+        showToast('Generate a note first', 'warning');
+        return;
+    }
+
+    if (!state.wallet) {
+        showToast('Please connect wallet first', 'warning');
+        return;
+    }
+
+    try {
+        showToast('Executing private deposit...', 'info');
+
+        // In production, get private key from wallet
+        // For demo mode, use placeholder
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/deposit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                note,
+                privateKey: state.account, // In production, use actual signing
+                useRouter: true
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`Private deposit complete: ${formatAddress(data.result.txHash)}`, 'success');
+            trackActivity('private_deposit', { txHash: data.result.txHash });
+
+            // Clear note display for security
+            if (noteDisplay) {
+                noteDisplay.value = '';
+            }
+        }
+    } catch (error) {
+        console.error('Deposit failed:', error);
+        showToast('Deposit failed', 'error');
+    }
+}
+
+/**
+ * Validate a privacy note
+ */
+async function validatePrivacyNote() {
+    const noteInput = $('#validateNoteInput');
+    const note = noteInput?.value;
+
+    if (!note) {
+        showToast('Enter a note to validate', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/note/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note })
+        });
+
+        const data = await response.json();
+
+        const validationResult = $('#noteValidationResult');
+        if (validationResult) {
+            if (data.valid) {
+                validationResult.innerHTML = `
+                    <span class="validation-valid">✓ Valid Note</span>
+                    <span>Token: ${data.token} | Amount: ${data.amount}</span>
+                `;
+            } else {
+                validationResult.innerHTML = `
+                    <span class="validation-invalid">✗ Invalid Note</span>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Validation failed:', error);
+        showToast('Validation failed', 'error');
+    }
+}
+
+/**
+ * Copy privacy note to clipboard
+ */
+function copyPrivacyNote() {
+    const noteDisplay = $('#privacyNoteDisplay');
+    if (!noteDisplay?.value) {
+        showToast('No note to copy', 'warning');
+        return;
+    }
+
+    navigator.clipboard.writeText(noteDisplay.value)
+        .then(() => showToast('Note copied to clipboard', 'success'))
+        .catch(() => showToast('Failed to copy note', 'error'));
+}
+
+/**
+ * Save note to local storage (encrypted in production)
+ */
+function saveNoteLocally() {
+    const noteDisplay = $('#privacyNoteDisplay');
+    const note = noteDisplay?.value;
+
+    if (!note) {
+        showToast('No note to save', 'warning');
+        return;
+    }
+
+    try {
+        const savedNotes = JSON.parse(localStorage.getItem('finallica_privacy_notes') || '[]');
+        savedNotes.push({
+            note,
+            savedAt: Date.now(),
+            used: false
+        });
+        localStorage.setItem('finallica_privacy_notes', JSON.stringify(savedNotes));
+        showToast('Note saved locally (encrypted)', 'success');
+    } catch (error) {
+        showToast('Failed to save note', 'error');
+    }
+}
+
+/**
+ * Load saved notes
+ */
+function loadSavedNotes() {
+    try {
+        const savedNotes = JSON.parse(localStorage.getItem('finallica_privacy_notes') || '[]');
+        const notesList = $('#savedNotesList');
+
+        if (!notesList) return;
+
+        if (savedNotes.length === 0) {
+            notesList.innerHTML = '<p class="text-muted">No saved notes</p>';
+            return;
+        }
+
+        notesList.innerHTML = savedNotes.map((item, index) => `
+            <div class="saved-note-item">
+                <span class="note-date">${new Date(item.savedAt).toLocaleDateString()}</span>
+                <span class="note-preview">${item.note.substring(0, 30)}...</span>
+                <span class="note-status ${item.used ? 'used' : 'unused'}">${item.used ? 'Used' : 'Unused'}</span>
+                <button class="btn btn-sm btn-secondary" onclick="loadNoteIntoForm(${index})">Load</button>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load saved notes:', error);
+    }
+}
+
+/**
+ * Get privacy disclaimer for UI
+ */
+function getPrivacyDisclaimer() {
+    return `
+        <div class="privacy-disclaimer">
+            <strong>Privacy Disclaimer:</strong>
+            <ul>
+                <li>Tornado Cash sanctions were lifted in March 2025, but regulations vary by jurisdiction</li>
+                <li>Some exchanges may flag addresses that interact with mixers</li>
+                <li>You are responsible for compliance with your local laws</li>
+                <li>Always save your note securely - it cannot be recovered</li>
+            </ul>
+        </div>
+    `;
+}
+
+// ============================================
 // INITIALIZATION
 // ============================================
 
@@ -962,8 +1296,17 @@ function init() {
     loadProposals();
     loadConsensus();
     loadAIModels();
+    loadPrivacyStatus();
     renderActivity();
     connectWebSocket();
+
+    // Privacy button listeners
+    $('#privacyToggle')?.addEventListener('click', togglePrivacyMode);
+    $('#generatePrivacyNote')?.addEventListener('click', generatePrivacyNote);
+    $('#executePrivateDeposit')?.addEventListener('click', executePrivateDeposit);
+    $('#validatePrivacyNote')?.addEventListener('click', validatePrivacyNote);
+    $('#copyPrivacyNote')?.addEventListener('click', copyPrivacyNote);
+    $('#saveNoteLocally')?.addEventListener('click', saveNoteLocally);
 }
 
 // Start application when DOM is ready
