@@ -3,7 +3,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { ModuleRegistry } = require('./types/ModuleManifest');
+const { ModuleManifest, ModuleRegistry } = require('./types/ModuleManifest');
 const { Module } = require('../engines/Module');
 
 /**
@@ -115,7 +115,8 @@ class ModuleLoader {
             // Initialize engine
             await engine.initialize({
                 system: systemInfo,
-                config: this.config
+                config: this.config,
+                moduleLoader: this
             });
 
             // Register modules from this engine
@@ -464,8 +465,9 @@ class ModuleLoader {
      */
     async _loadManifest(manifestPath) {
         try {
-            const manifestModule = await import(path.resolve(manifestPath));
-            return manifestModule.default;
+            const manifestContent = await fs.readFile(path.resolve(manifestPath), 'utf8');
+            const manifestData = JSON.parse(manifestContent);
+            return new ModuleManifest(manifestData);
         } catch (error) {
             throw new Error(`Failed to load manifest from ${manifestPath}: ${error.message}`);
         }
@@ -478,7 +480,7 @@ class ModuleLoader {
     async _loadModule(modulePath, basePath) {
         const fullPath = path.resolve(basePath, modulePath);
         try {
-            return await import(fullPath);
+            return require(fullPath);
         } catch (error) {
             throw new Error(`Failed to load module from ${fullPath}: ${error.message}`);
         }

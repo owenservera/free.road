@@ -8,7 +8,7 @@
   "keywords": ["agents", "fleet", "scheduling", "ai"],
   "engine": "agents",
   "type": "core",
-  "dependencies": ["infrastructure"],
+  "dependencies": [],
   "main": "./index.js",
   "services": [
     { "name": "agent-fleet", "path": "./services/agent-fleet.js" },

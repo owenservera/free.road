@@ -441,6 +441,9 @@ class Engine {
      * @private
      */
     _createModuleContext(module) {
+        // Debug: Log context database status
+        console.log(`[Engine:${this.id}] Creating module context for ${module.id}, database:`, this.context.database ? 'PRESENT' : 'UNDEFINED');
+
         return {
             engine: this,
             dependencies: this.dependencies,
@@ -448,7 +451,22 @@ class Engine {
             config: this.config,
             logger: console,
             database: this.context.database,
-            storage: this.context.storage
+            storage: this.context.storage,
+            getDependency: (depId) => {
+                // Check if dependency is a module in this engine
+                if (this.modules.has(depId)) {
+                    return this.modules.get(depId);
+                }
+                // Check if dependency is a module in another engine (via moduleLoader)
+                if (this.context.moduleLoader) {
+                    const allModules = this.context.moduleLoader.getModules();
+                    if (allModules.has(depId)) {
+                        return allModules.get(depId);
+                    }
+                }
+                // Check if dependency is provided by the engine context
+                return this.dependencies.find(dep => dep.id === depId || dep === depId);
+            }
         };
     }
 

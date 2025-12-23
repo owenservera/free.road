@@ -191,6 +191,17 @@ class APIKeyPool {
     }
 
     async loadPoolsFromDatabase() {
+        // PLACEHOLDER: Check if database is available - if not, skip loading from DB
+        if (!this.db) {
+            console.warn('⚠️ APIKeyPool: Database not available, skipping database pool loading');
+            return;
+        }
+
+        if (typeof this.db.getAllAPIKeyPools !== 'function') {
+            console.warn('⚠️ APIKeyPool: Database does not have getAllAPIKeyPools method, skipping database pool loading');
+            return;
+        }
+
         const pools = this.db.getAllAPIKeyPools();
 
         for (const pool of pools) {

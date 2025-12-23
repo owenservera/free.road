@@ -9,11 +9,11 @@ const http = require('http');
 const WebSocket = require('ws');
 
 // Import all engines
-const { PlatformEngine } = require('./engines/PlatformEngine');
-const { ContentEngine } = require('./engines/content/ContentEngine');
-const { AgentEngine } = require('./engines/agents/AgentEngine');
-const { CollaborationEngine } = require('./engines/collaboration/CollaborationEngine');
-const { GovernanceEngine } = require('./engines/governance/GovernanceEngine');
+const PlatformEngine = require('./engines/PlatformEngine');
+const ContentEngine = require('./engines/content/ContentEngine');
+const AgentEngine = require('./engines/agents/AgentEngine');
+const CollaborationEngine = require('./engines/collaboration/CollaborationEngine');
+const GovernanceEngine = require('./engines/governance/GovernanceEngine');
 
 const path = require('path');
 

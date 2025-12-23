@@ -1,0 +1,17 @@
+{
+  "id": "collaboration",
+  "name": "Collaboration Engine",
+  "version": "1.0.0",
+  "description": "Sharing and command system engine",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["sharing", "commands", "collaboration"],
+  "engine": "collaboration",
+  "type": "engine",
+  "dependencies": ["platform"],
+  "main": "./CollaborationEngine.js",
+  "modules": [
+    { "name": "sharing", "path": "./sharing" }
+  ],
+  "config": {}
+}

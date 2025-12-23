@@ -1,0 +1,18 @@
+{
+  "id": "content",
+  "name": "Content Engine",
+  "version": "1.0.0",
+  "description": "Documentation and search engine",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["documentation", "search", "content"],
+  "engine": "content",
+  "type": "engine",
+  "dependencies": ["platform"],
+  "main": "./ContentEngine.js",
+  "modules": [
+    { "name": "documentation", "path": "./documentation" },
+    { "name": "search", "path": "./search" }
+  ],
+  "config": {}
+}

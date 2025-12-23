@@ -74,20 +74,153 @@ This is not just a license choice—it's a core architectural principle. The sys
 
 When building features, ask: "How would a contributor extend this? How would a community instance run this?"
 
+---
+
+## AI Model Workflow: Opus 4.5 → Sonnet 4.5 → Haiku
+
+**A surgical, cost-optimized approach to complex development tasks.**
+
+### The Three-Model Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TASK START                                │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 1: OPUS 4.5        │
+│  Purpose:  Architecture & Planning                           │
+│  Tasks:    • Complex analysis                               │
+│            • System design                                  │
+│            • Identify edge cases                            │
+│            • Create detailed spec for Sonnet                │
+│  Handoff:  → Pass context + plan to Sonnet 4.5              │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 2: SONNET 4.5      │
+│  Purpose:  Implementation & Debugging                        │
+│  Tasks:    • Read code deeply                               │
+│            • Fix complex bugs                                │
+│            • Implement core logic                            │
+│            • Add guards/placeholders                         │
+│            • Create detailed task spec for Haiku             │
+│  Handoff:  → Pass precise instructions to Haiku             │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 3: HAIKU        │
+│  Purpose:  Mechanical & Systematic Execution                  │
+│  Tasks:    • Repetitive refactoring                          │
+│            • Adding similar stubs across files               │
+│            • Running tests                                   │
+│            • Documentation updates                           │
+│            • Well-defined file operations                    │
+│  Handoff:  → Report results to Sonnet for verification      │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    TASK COMPLETE                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### When to Use Each Model
+
+| Situation | Use Model | Reason |
+|-----------|-----------|--------|
+| New feature architecture | Opus 4.5 | Needs deep reasoning |
+| Complex bug investigation | Opus 4.5 | Needs system-wide analysis |
+| Unknown root cause | Opus 4.5 | Needs exploration |
+| Implementing fixes | Sonnet 4.5 | Balance of speed + accuracy |
+| Adding error handling | Sonnet 4.5 | Needs context awareness |
+| Creating task specs | Sonnet 4.5 | Needs to understand codebase |
+| Adding similar guards | Haiku | Mechanical pattern repetition |
+| Updating 10+ files | Haiku | Cost efficiency |
+| Running test suites | Haiku | Simple execution |
+| Formatting changes | Haiku | Low complexity |
+
+### Handoff Signals
+
+**Opus → Sonnet:**
+```
+"I've analyzed the issue. Here's the root cause and fix approach.
+Continue implementation and debug as needed. Create Haiku tasks for repetitive work."
+```
+
+**Sonnet → Haiku:**
+```
+"Here are the exact file changes needed. For each file:
+1. Add [specific guard] at [specific line]
+2. Use this exact format: [code pattern]
+3. Report back when complete."
+```
+
+**Haiku → Sonnet:**
+```
+"Completed [N] files. Encountered [issue] in [file].
+Awaiting verification and next instructions."
+```
+
+### General Rules
+
+1. **Start with Opus** when: Problem is unclear, architecture is involved, or multiple systems interact
+2. **Use Sonnet** for: Most implementation work, debugging, complex file changes
+3. **Delegate to Haiku** for: Repetitive tasks, well-specified changes, test execution
+4. **Never skip stages** when: Complexity increases, or errors cascade
+5. **Fallback to previous model** when: Next model gets stuck or produces errors
+
+### Example Task Flow
+
+**Task:** Fix database context not passed to modules
+
+```
+Opus 4.5:  → Analyzes engine/module initialization flow
+           → Identifies context merge issue
+           → Documents exact fix locations
+           → Passes to Sonnet
+
+Sonnet 4.5: → Adds guards to prevent crashes
+           → Creates debug logging
+           → Documents placeholder spec
+           → Passes mechanical work to Haiku
+
+Haiku:     → Adds guards to 15+ similar files
+           → Creates DATABASE_PLACEHOLDERS.md
+           → Runs server to verify
+           → Reports to Sonnet
+
+Sonnet 4.5: → Verifies Haiku's work
+           → Tests server startup
+           → Commits changes
+           → Task complete
+```
+
+### Cost Optimization
+
+- **Opus:** ~15x cost, ~5x time → Use sparingly for thinking work
+- **Sonnet:** ~3x cost, ~1.5x time → Use for most implementation
+- **Haiku:** ~1x cost, ~1x time → Use for mechanical execution
+
+**Target Distribution:** Opus 5% / Sonnet 35% / Haiku 60%
+
 ## Package Manager
 
-**IMPORTANT: This project uses Bun only.** Do not use npm or yarn.
+**IMPORTANT: This project uses Bun for package management only.** Server files use Node.js runtime. Do not use npm or yarn.
 
 **For VIVIM-Dev-Workstation**, use the full path:
 ```bash
 # Install dependencies
 "C:/Users/VIVIM.inc/.bun/bin/bun.exe" install
 
-# Start backend server
-"C:/Users/VIVIM.inc/.bun/bin/bun.exe" run backend/server.js
+# Start backend server (Express app)
+node backend/server.js
 
-# Start main server
-"C:/Users/VIVIM.inc/.bun/bin/bun.exe" run server-new.js
+# Start main server (Express app)
+node server-new.js
 
 # Install new package
 "C:/Users/VIVIM.inc/.bun/bin/bun.exe" add <package-name>

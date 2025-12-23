@@ -1,0 +1,18 @@
+{
+  "id": "platform",
+  "name": "Platform Engine",
+  "version": "1.0.0",
+  "description": "Core platform infrastructure engine",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["platform", "infrastructure", "core"],
+  "engine": "platform",
+  "type": "engine",
+  "dependencies": [],
+  "main": "./PlatformEngine.js",
+  "modules": [
+    { "name": "infrastructure", "path": "./infrastructure" },
+    { "name": "repository", "path": "./repository" }
+  ],
+  "config": {}
+}

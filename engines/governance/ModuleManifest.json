@@ -1,0 +1,17 @@
+{
+  "id": "governance",
+  "name": "Governance Engine",
+  "version": "1.0.0",
+  "description": "Privacy and governance engine",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["governance", "privacy", "blockchain"],
+  "engine": "governance",
+  "type": "engine",
+  "dependencies": ["platform"],
+  "main": "./GovernanceEngine.js",
+  "modules": [
+    { "name": "privacy", "path": "./privacy" }
+  ],
+  "config": {}
+}

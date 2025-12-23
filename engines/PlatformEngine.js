@@ -127,21 +127,15 @@ class PlatformEngine extends Engine {
      * Initialize logging service
      * @private
      */
-    async _initializeLogger(loggerConfig) {
-        if (!loggerConfig) {
-            console.log('⚠️  No logger configuration provided');
+    async _initializeLogger(logger) {
+        if (!logger) {
+            console.log('⚠️  No logger provided');
             return;
         }
 
-        try {
-            const LoggerService = require('./platform/infrastructure/services/logger');
-            this.logger = new LoggerService(loggerConfig);
-            this.context.logger = this.logger;
-            console.log('📝 Logging service initialized');
-        } catch (error) {
-            console.error('❌ Failed to initialize logging service:', error);
-            throw error;
-        }
+        this.logger = logger;
+        this.context.logger = this.logger;
+        console.log('📝 Logging service initialized');
     }
 
     /**

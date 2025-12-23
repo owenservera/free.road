@@ -2,7 +2,7 @@
 // Orchestrates the entire agent fleet - spawning, monitoring, task distribution
 
 const crypto = require('crypto');
-const BaseAgent = require('./agents/base-agent');
+const BaseAgent = require('../../../../backend/services/agents/base-agent.js');
 
 class AgentFleetService {
     constructor(db, keyPool, budgetManager) {
@@ -91,12 +91,19 @@ class AgentFleetService {
 
         this.isRunning = true;
 
-        // Create session
-        this.sessionId = 'session_' + crypto.randomBytes(16).toString('hex');
-        await this.db.createAgentSession({
-            id: this.sessionId,
-            trigger_type: 'manual'
-        });
+        // PLACEHOLDER: Check if database is available before creating session
+        if (!this.db) {
+            console.warn('⚠️ Agent Fleet: Database not available, skipping session creation');
+        } else {
+            // Create session
+            this.sessionId = 'session_' + crypto.randomBytes(16).toString('hex');
+            if (typeof this.db.createAgentSession === 'function') {
+                await this.db.createAgentSession({
+                    id: this.sessionId,
+                    trigger_type: 'manual'
+                });
+            }
+        }
 
         // Spawn agents
         const typesToStart = agentTypes || Object.keys(this.agentConfigs).filter(
@@ -193,25 +200,25 @@ class AgentFleetService {
         try {
             switch (agentType) {
                 case 'code_review':
-                    const CodeReviewAgent = require('./agents/code-review-agent');
+                    const CodeReviewAgent = require('../../../../backend/services/agents/code-review-agent.js');
                     return CodeReviewAgent;
                 case 'documentation':
-                    const DocumentationAgent = require('./agents/documentation-agent');
+                    const DocumentationAgent = require('../../../../backend/services/agents/documentation-agent.js');
                     return DocumentationAgent;
                 case 'repo_manager':
-                    const RepoManagerAgent = require('./agents/repo-manager-agent');
+                    const RepoManagerAgent = require('../../../../backend/services/agents/repo-manager-agent.js');
                     return RepoManagerAgent;
                 case 'tooling':
-                    const ToolingAgent = require('./agents/tooling-agent');
+                    const ToolingAgent = require('../../../../backend/services/agents/tooling-agent.js');
                     return ToolingAgent;
                 case 'cost_observability':
-                    const CostObservabilityAgent = require('./agents/cost-observability-agent');
+                    const CostObservabilityAgent = require('../../../../backend/services/agents/cost-observability-agent.js');
                     return CostObservabilityAgent;
                 case 'debugger':
-                    const DebuggerAgent = require('./agents/debugger-agent');
+                    const DebuggerAgent = require('../../../../backend/services/agents/debugger-agent.js');
                     return DebuggerAgent;
                 case 'visualization':
-                    const VisualizationAgent = require('./agents/visualization-agent');
+                    const VisualizationAgent = require('../../../../backend/services/agents/visualization-agent.js');
                     return VisualizationAgent;
                 default:
                     return null;

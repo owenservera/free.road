@@ -1,0 +1,21 @@
+{
+  "id": "agents",
+  "name": "Agent Engine",
+  "version": "1.0.0",
+  "description": "AI agent fleet orchestration engine",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["agents", "fleet", "ai", "orchestration"],
+  "engine": "agents",
+  "type": "engine",
+  "dependencies": ["platform"],
+  "main": "./AgentEngine.js",
+  "modules": [
+    { "name": "fleet", "path": "./fleet" }
+  ],
+  "config": {
+    "autoStart": false,
+    "concurrency": 3,
+    "maxRetries": 3
+  }
+}

@@ -18,7 +18,7 @@ class AgentFleetModule extends Module {
             ...options
         });
 
-        this.dependencies = ['infrastructure'];
+        this.dependencies = [];
     }
 
     getEngine() {
