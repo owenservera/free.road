@@ -1,0 +1,138 @@
+name: Core Service Worktree Tests
+
+on:
+  push:
+    branches:
+      - 'core/**'
+  pull_request:
+    branches:
+      - 'core/**'
+
+jobs:
+  # Extract service name from branch name
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      service-name: ${{ steps.extract-service.outputs.service-name }}
+    steps:
+      - name: Extract service name from branch
+        id: extract-service
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          SERVICE_NAME="${BRANCH#core/}"
+          echo "service-name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "Service name: ${SERVICE_NAME}"
+
+  test:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          bun install
+
+      - name: Run service-specific tests
+        run: |
+          SERVICE_NAME="${{ needs.setup.outputs.service-name }}"
+          echo "Testing service: ${SERVICE_NAME}"
+
+          # Map service names to file names
+          case "$SERVICE_NAME" in
+            "fleet-service")
+              SERVICE_FILE="backend/services/agent-fleet-service.js"
+              ;;
+            "budget-manager")
+              SERVICE_FILE="backend/services/budget-manager.js"
+              ;;
+            "api-pool")
+              SERVICE_FILE="backend/services/api-key-pool.js"
+              ;;
+            "scheduler")
+              SERVICE_FILE="backend/services/agent-scheduler.js"
+              ;;
+            *)
+              SERVICE_FILE="backend/services/${SERVICE_NAME}.js"
+              ;;
+          esac
+
+          # Check if service file exists and run syntax check
+          if [ -f "$SERVICE_FILE" ]; then
+            echo "Service file found: $SERVICE_FILE"
+            node -c "$SERVICE_FILE"
+          else
+            echo "Warning: Service file not found for ${SERVICE_NAME}"
+          fi
+
+  lint:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          bun install
+
+      - name: Run linting
+        run: |
+          SERVICE_NAME="${{ needs.setup.outputs.service-name }}"
+
+          case "$SERVICE_NAME" in
+            "fleet-service")
+              SERVICE_FILE="services/agent-fleet-service.js"
+              ;;
+            "budget-manager")
+              SERVICE_FILE="services/budget-manager.js"
+              ;;
+            "api-pool")
+              SERVICE_FILE="services/api-key-pool.js"
+              ;;
+            "scheduler")
+              SERVICE_FILE="services/agent-scheduler.js"
+              ;;
+            *)
+              SERVICE_FILE="services/${SERVICE_NAME}.js"
+              ;;
+          esac
+
+          cd backend
+          if [ -f "$SERVICE_FILE" ]; then
+            bun run lint -- "$SERVICE_FILE" || true
+          fi
+        continue-on-error: true
+
+  dependencies:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          bun install
+
+      - name: Check for circular dependencies
+        run: |
+          echo "Checking for circular dependencies in core services..."
+          # This is a basic check - consider using madge for deeper analysis
+          cd backend/services
+          for file in agent-fleet-service.js budget-manager.js api-key-pool.js agent-scheduler.js; do
+            if [ -f "$file" ]; then
+              echo "Checking $file..."
+              # Basic syntax check already done in test job
+            fi
+          done

@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# Worktree Cleanup Utility
+# Helps manage and clean up worktrees
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+REPO_DIR="$(pwd)"
+PARENT_DIR="$(dirname "$REPO_DIR")"
+
+show_help() {
+    echo "Worktree Cleanup Utility"
+    echo ""
+    echo "Usage: ./worktree-cleanup [command]"
+    echo ""
+    echo "Commands:"
+    echo "  list              List all worktrees (git + detected)"
+    echo "  remove <name>     Remove a specific worktree"
+    echo "  prune             Remove git worktree references for deleted branches"
+    echo "  merged            List branches that have been merged"
+    echo "  clean-merged      Remove worktrees for merged branches"
+    echo "  status            Show detailed worktree status"
+    echo "  help              Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./worktree-cleanup list"
+    echo "  ./worktree-cleanup remove ../finallica-agent-review"
+    echo "  ./worktree-cleanup clean-merged"
+}
+
+list_worktrees() {
+    echo "=== Git Worktrees ==="
+    git worktree list
+    echo ""
+
+    echo "=== Detected Worktree Directories ==="
+    for dir in "$PARENT_DIR"/finallica-*; do
+        if [ -d "$dir" ]; then
+            name=$(basename "$dir")
+            if [ -d "$dir/.git" ]; then
+                branch=$(cd "$dir" && git branch --show-current 2>/dev/null)
+                echo "  ✓ $name ($branch)"
+            else
+                echo "  ○ $name (not a git worktree)"
+            fi
+        fi
+    done
+}
+
+remove_worktree() {
+    local worktree_path=$1
+
+    if [ -z "$worktree_path" ]; then
+        echo -e "${RED}Error: Please specify a worktree path${NC}"
+        echo "Usage: ./worktree-cleanup remove <path>"
+        echo "Example: ./worktree-cleanup remove ../finallica-agent-review"
+        exit 1
+    fi
+
+    # Resolve relative path
+    if [[ "$worktree_path" == ../* ]]; then
+        worktree_path="$PARENT_DIR/$(basename "$worktree_path")"
+    fi
+
+    if [ ! -d "$worktree_path" ]; then
+        echo -e "${RED}Error: Directory not found: $worktree_path${NC}"
+        exit 1
+    fi
+
+    local name=$(basename "$worktree_path")
+
+    # Check if it's a git worktree
+    if git worktree list | grep -q "$worktree_path"; then
+        echo -e "${YELLOW}Removing git worktree: $name${NC}"
+        git worktree remove "$worktree_path"
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Worktree removed successfully${NC}"
+
+            # Ask if user wants to remove the branch too
+            local branch=$(cd "$worktree_path" 2>/dev/null && git branch --show-current 2>/dev/null)
+            if [ -n "$branch" ]; then
+                echo -e "${YELLOW}Branch '$branch' still exists. Remove it? (y/n)${NC}"
+                read -r answer
+                if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+                    git branch -d "$branch"
+                    if [ $? -eq 0 ]; then
+                        echo -e "${GREEN}✓ Branch '$branch' removed${NC}"
+                    else
+                        echo -e "${YELLOW}! Branch '$branch' not removed (may not be merged)${NC}"
+                    fi
+                fi
+            fi
+        else
+            echo -e "${RED}✗ Failed to remove worktree${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}Not a git worktree. Remove directory anyway? (y/n)${NC}"
+        read -r answer
+        if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+            rm -rf "$worktree_path"
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ Directory removed${NC}"
+            else
+                echo -e "${RED}✗ Failed to remove directory${NC}"
+                exit 1
+            fi
+        fi
+    fi
+}
+
+prune_worktrees() {
+    echo -e "${YELLOW}Pruning worktrees...${NC}"
+    git worktree prune
+    echo -e "${GREEN}✓ Pruned git worktree references${NC}"
+}
+
+list_merged() {
+    echo "=== Merged Branches ==="
+    echo ""
+    echo "These branches have been merged to main:"
+    echo ""
+
+    git branch --merged main | grep -E 'agent/|core/|feature/|test/' | while read branch; do
+        if [ "$branch" != "" ]; then
+            # Check if worktree exists
+            local worktree_path="$PARENT_DIR/finallica-${branch#*/}"
+            if git worktree list | grep -q "$branch"; then
+                echo -e "  ${GREEN}✓${NC} $branch (worktree exists)"
+            else
+                echo "  ○ $branch (no worktree)"
+            fi
+        fi
+    done
+}
+
+clean_merged() {
+    echo "=== Cleaning Merged Branches ==="
+    echo ""
+
+    # Find merged branches with worktrees
+    git branch --merged main | grep -E 'agent/|core/|feature/|test/' | while read branch; do
+        if [ "$branch" != "" ]; then
+            # Check if worktree exists
+            if git worktree list | grep -q "$branch"; then
+                local worktree_path=$(git worktree list | grep "$branch" | awk '{print $1}')
+
+                echo -e "${YELLOW}Found merged branch with worktree: $branch${NC}"
+                echo "  Worktree: $worktree_path"
+                echo "  Remove? (y/n)"
+                read -r answer
+
+                if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+                    git worktree remove "$worktree_path"
+                    git branch -d "$branch"
+                    if [ $? -eq 0 ]; then
+                        echo -e "${GREEN}✓ Removed $branch${NC}"
+                    else
+                        echo -e "${RED}✗ Failed to remove $branch${NC}"
+                    fi
+                fi
+                echo ""
+            fi
+        fi
+    done
+
+    echo -e "${GREEN}Cleanup complete${NC}"
+}
+
+show_status() {
+    echo "=== Detailed Worktree Status ==="
+    echo ""
+
+    # List all git worktrees
+    git worktree list --porcelain | while read -r line; do
+        if [[ "$line" == worktree* ]]; then
+            local path=$(echo "$line" | cut -d' ' -f2)
+            local name=$(basename "$path")
+            echo -e "${BLUE}Worktree:${NC} $name"
+            echo -e "${BLUE}Path:${NC}    $path"
+        fi
+        if [[ "$line" == branch* ]]; then
+            local branch=$(echo "$line" | cut -d' ' -f2)
+            echo -e "${BLUE}Branch:${NC}  $branch"
+
+            # Check if branch is merged
+            if git branch --merged main | grep -q "$branch"; then
+                echo -e "${GREEN}Status:${NC}  MERGED to main"
+            else
+                echo -e "${YELLOW}Status:${NC}  NOT merged"
+            fi
+
+            # Check for uncommitted changes
+            if [ -n "$path" ]; then
+                local changes=$(cd "$path" 2>/dev/null && git status --porcelain 2>/dev/null | wc -l)
+                if [ "$changes" -gt 0 ]; then
+                    echo -e "${RED}Changes:${NC} $changes uncommitted files"
+                else
+                    echo -e "${GREEN}Changes:${NC} None (clean)${NC}"
+                fi
+            fi
+
+            echo ""
+        fi
+    done
+}
+
+# Main command routing
+COMMAND=$1
+shift
+
+case $COMMAND in
+    list)
+        list_worktrees
+        ;;
+    remove)
+        remove_worktree "$@"
+        ;;
+    prune)
+        prune_worktrees
+        ;;
+    merged)
+        list_merged
+        ;;
+    clean-merged)
+        clean_merged
+        ;;
+    status)
+        show_status
+        ;;
+    help|--help|-h|"")
+        show_help
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $COMMAND${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

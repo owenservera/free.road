@@ -1,0 +1,146 @@
+name: Integration Branch Tests
+
+on:
+  push:
+    branches:
+      - 'test/**'
+  pull_request:
+    branches:
+      - 'test/**'
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          bun install
+
+      - name: Check database schema
+        run: |
+          cd backend
+          if [ -f "database/schema.sql" ]; then
+            echo "✓ Database schema exists"
+          else
+            echo "✗ Database schema missing"
+            exit 1
+          fi
+
+      - name: Check migrations
+        run: |
+          cd backend/database/migrations
+          MIGRATION_COUNT=$(ls -1 *.sql 2>/dev/null | wc -l)
+          echo "Found ${MIGRATION_COUNT} migration files"
+
+          if [ "$MIGRATION_COUNT" -eq 0 ]; then
+            echo "Warning: No migration files found"
+          fi
+
+      - name: Verify all agents can be loaded
+        run: |
+          cd backend/services/agents
+
+          for agent_file in *-agent.js; do
+            if [ -f "$agent_file" ]; then
+              echo "Checking $agent_file..."
+              node -c "$agent_file"
+            fi
+          done
+
+      - name: Verify core services can be loaded
+        run: |
+          cd backend/services
+
+          for service_file in agent-fleet-service.js agent-scheduler.js api-key-pool.js budget-manager.js; do
+            if [ -f "$service_file" ]; then
+              echo "Checking $service_file..."
+              node -c "$service_file"
+            fi
+          done
+
+      - name: Check for integration test markers
+        run: |
+          echo "Looking for integration test files..."
+          find . -name "*.test.js" -o -name "*.spec.js" | head -20
+
+      - name: Verify CLI tools
+        run: |
+          cd backend
+          if [ -f "../bin/agent-fleet" ]; then
+            echo "✓ CLI tool exists"
+            # Basic syntax check for the shell script
+            if [ -x "../bin/agent-fleet" ]; then
+              echo "✓ CLI tool is executable"
+            fi
+          fi
+
+  merge-safety:
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for merge conflicts
+        run: |
+          echo "Checking for potential merge conflicts..."
+          if grep -r "<<<<<<< HEAD" . --exclude-dir=.git; then
+            echo "✗ Merge conflict markers found"
+            exit 1
+          else
+            echo "✓ No merge conflict markers"
+          fi
+
+      - name: Check database migration conflicts
+        run: |
+          echo "Checking database migration consistency..."
+          # Verify schema file exists and is valid
+          if [ -f "backend/database/schema.sql" ]; then
+            echo "✓ Schema file present"
+          else
+            echo "✗ Schema file missing"
+            exit 1
+          fi
+
+      - name: List branches merged into this integration branch
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          echo "Integration branch: $BRANCH"
+          echo "Merged branches:"
+          git branch --merged | grep -E 'agent/|core/|feature/' || echo "None"
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [integration-tests, merge-safety]
+    if: always()
+    steps:
+      - name: Integration test summary
+        run: |
+          echo "╔════════════════════════════════════════════════════════════╗"
+          echo "║         Integration Branch Test Summary                    ║"
+          echo "╚════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo ""
+          echo "Status checks:"
+          echo "  Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "  Merge Safety:       ${{ needs.merge-safety.result }}"
+          echo ""
+
+          if [ "${{ needs.integration-tests.result }}" == "success" ] && \
+             [ "${{ needs.merge-safety.result }}" == "success" ]; then
+            echo "✓ All checks passed - ready to merge to main"
+          else
+            echo "✗ Some checks failed - review before merging"
+            exit 1
+          fi

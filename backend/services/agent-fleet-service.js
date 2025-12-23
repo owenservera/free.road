@@ -15,6 +15,12 @@ class AgentFleetService {
         this.devModeDetector = null;
         this.scheduler = null;
 
+        // Share & Command System
+        this.shareService = null;
+        this.commandRegistry = null;
+        this.sessionMessages = []; // Track messages for sharing
+        this.currentShareId = null;
+
         // Agent type configurations
         this.agentConfigs = {
             code_review: {
@@ -375,6 +381,117 @@ class AgentFleetService {
         }
 
         return stats;
+    }
+
+    // ============================================
+    // SHARE & COMMAND SYSTEM INTEGRATION
+    // ============================================
+
+    // Set share service and command registry
+    setShareServices(shareService, commandRegistry) {
+        this.shareService = shareService;
+        this.commandRegistry = commandRegistry;
+    }
+
+    // Record a message in the current session
+    recordMessage(role, content, toolCalls = null) {
+        const message = {
+            role,
+            content,
+            tool_calls: toolCalls,
+            timestamp: Math.floor(Date.now() / 1000)
+        };
+        this.sessionMessages.push(message);
+
+        // Sync to current share if exists
+        if (this.currentShareId && this.shareService) {
+            this.shareService.addMessage(this.currentShareId, role, content, toolCalls);
+        }
+    }
+
+    // Get session messages
+    getSessionMessages() {
+        return this.sessionMessages;
+    }
+
+    // Clear session messages
+    clearSessionMessages() {
+        this.sessionMessages = [];
+    }
+
+    // Share current session
+    async shareSession(options = {}) {
+        if (!this.shareService) {
+            throw new Error('ShareService not initialized');
+        }
+
+        if (!this.sessionId) {
+            throw new Error('No active session to share');
+        }
+
+        const share = await this.shareService.createShare(this.sessionId, {
+            title: options.title || 'Agent Fleet Session',
+            isPublic: options.isPublic !== undefined ? options.isPublic : true,
+            expirationHours: options.expirationHours || 0,
+            metadata: {
+                agentCount: this.agents.size,
+                agents: Array.from(this.agents.values()).map(a => a.agentType)
+            }
+        });
+
+        this.currentShareId = share.shareId;
+
+        // Sync all existing messages
+        await this.shareService.syncSessionToShare(
+            share.shareId,
+            this.sessionId,
+            this.sessionMessages
+        );
+
+        return share;
+    }
+
+    // Unshare current session
+    async unshareSession() {
+        if (this.currentShareId && this.shareService) {
+            await this.shareService.deleteShare(this.currentShareId);
+            this.currentShareId = null;
+            return true;
+        }
+        return false;
+    }
+
+    // Get current share info
+    getCurrentShare() {
+        if (!this.currentShareId || !this.shareService) {
+            return null;
+        }
+        return {
+            shareId: this.currentShareId,
+            url: this.shareService.getShareUrl(this.currentShareId)
+        };
+    }
+
+    // Execute a custom command
+    async executeCommand(commandName, args = {}) {
+        if (!this.commandRegistry) {
+            throw new Error('CommandRegistry not initialized');
+        }
+
+        const result = await this.commandRegistry.executeCommand(commandName, args);
+
+        // Record the command as a user message
+        this.recordMessage('user', `/command ${commandName}`);
+
+        return result;
+    }
+
+    // List available commands
+    async listCommands(agentType = null) {
+        if (!this.commandRegistry) {
+            return [];
+        }
+        return await this.commandRegistry.listCommands({ agentType });
     }
 }
 

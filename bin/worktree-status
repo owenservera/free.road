@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Worktree Status Dashboard
+# Shows all worktrees and their current status
+
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║          Finallica Agent Fleet - Worktree Status             ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Get the parent directory of the current repo
+REPO_DIR="$(pwd)"
+PARENT_DIR="$(dirname "$REPO_DIR")"
+
+# Check all possible worktrees
+check_worktree() {
+    local name=$1
+    local path="$PARENT_DIR/$name"
+    local desc=$2
+
+    if [ -d "$path" ]; then
+        local branch=$(cd "$path" 2>/dev/null && git branch --show-current 2>/dev/null)
+        local status=$(cd "$path" 2>/dev/null && git status --porcelain 2>/dev/null | wc -l)
+        local commit=$(cd "$path" 2>/dev/null && git log -1 --oneline 2>/dev/null)
+
+        if [ "$status" -eq 0 ]; then
+            echo "  ✓ $name"
+        else
+            echo "  ● $name ($status uncommitted changes)"
+        fi
+
+        if [ -n "$branch" ]; then
+            echo "    Branch: $branch"
+        fi
+
+        if [ -n "$commit" ]; then
+            echo "    Commit: $commit"
+        fi
+
+        echo "    Intent: $desc"
+        echo ""
+    fi
+}
+
+echo "═════════════════════════════════════════════════════════════════"
+echo "Agent Worktrees"
+echo "═════════════════════════════════════════════════════════════════"
+check_worktree "finallica-agent-review" "Code review agent (Claude Sonnet 4 / GPT-4o)"
+check_worktree "finallica-agent-docs" "Documentation agent (Claude Haiku / GPT-4o-mini)"
+check_worktree "finallica-agent-repo" "Repo manager agent (Claude Sonnet 4)"
+check_worktree "finallica-agent-tooling" "Tooling agent (GPT-4o / DeepSeek)"
+check_worktree "finallica-agent-debug" "Debugger agent (Claude Sonnet 4 / o1)"
+check_worktree "finallica-agent-viz" "Visualization agent (Claude Haiku / GPT-4o-mini)"
+check_worktree "finallica-agent-cost" "Cost observability agent (Claude Sonnet 4)"
+
+echo "═════════════════════════════════════════════════════════════════"
+echo "Core Service Worktrees"
+echo "═════════════════════════════════════════════════════════════════"
+check_worktree "finallica-core-fleet" "Fleet service (Claude Opus 4 / o1)"
+check_worktree "finallica-core-budget" "Budget manager (Claude Sonnet 4)"
+check_worktree "finallica-core-pool" "API key pool (GPT-4o / Claude Sonnet 4)"
+check_worktree "finallica-core-scheduler" "Agent scheduler (Claude Sonnet 4)"
+
+echo "═════════════════════════════════════════════════════════════════"
+echo "Feature Worktrees"
+echo "═════════════════════════════════════════════════════════════════"
+check_worktree "finallica-frontend" "Dashboard UI (GPT-4o / Claude Sonnet 4)"
+check_worktree "finallica-cli" "CLI enhancements (GPT-4o / Claude Sonnet 4)"
+check_worktree "finallica-api" "API routes (Claude Sonnet 4 / GPT-4o)"
+
+echo "═════════════════════════════════════════════════════════════════"
+echo "Integration"
+echo "═════════════════════════════════════════════════════════════════"
+check_worktree "finallica-integration" "Integration testing (Claude Sonnet 4)"
+
+echo "═════════════════════════════════════════════════════════════════"
+echo "Git Worktree List (Official)"
+echo "═════════════════════════════════════════════════════════════════"
+git worktree list
+
+echo ""
+echo "─────────────────────────────────────────────────────────────────"
+echo "Legend:  ✓ Clean  ● Modified  ○ Not created"
+echo "─────────────────────────────────────────────────────────────────"

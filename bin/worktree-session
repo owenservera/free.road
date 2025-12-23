@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Worktree Session Manager
+# Shows available worktree sessions and their recommended AI models
+
+SESSION_NAME=$1
+shift
+
+case $SESSION_NAME in
+  core)
+    echo "=== Core Infrastructure Session ==="
+    echo ""
+    echo "Worktrees:"
+    echo "  1. ../finallica-core-fleet (core/fleet-service)"
+    echo "     Intent: Fleet service architecture, orchestration"
+    echo "     Recommended: Claude Opus 4 or o1-preview (complex architecture)"
+    echo ""
+    echo "  2. ../finallica-core-budget (core/budget-manager)"
+    echo "     Intent: Budget enforcement & forecasting features"
+    echo "     Recommended: Claude Sonnet 4 (numerical analysis)"
+    echo ""
+    echo "  3. ../finallica-core-pool (core/api-pool)"
+    echo "     Intent: API key management, provider integration"
+    echo "     Recommended: GPT-4o or Claude Sonnet 4 (API design)"
+    echo ""
+    echo "  4. ../finallica-integration (test/integration)"
+    echo "     Intent: Test core service integration"
+    echo "     Recommended: Claude Sonnet 4 (system understanding)"
+    ;;
+  agents)
+    echo "=== Agent Development Session ==="
+    echo ""
+    echo "Worktrees:"
+    echo "  1. ../finallica-agent-review (agent/code-review)"
+    echo "     Intent: Code review agent improvements"
+    echo "     Recommended: Claude Sonnet 4 or GPT-4o (code analysis)"
+    echo ""
+    echo "  2. ../finallica-agent-docs (agent/documentation)"
+    echo "     Intent: Documentation agent enhancements"
+    echo "     Recommended: Claude Haiku or GPT-4o-mini (cost-effective)"
+    echo ""
+    echo "  3. ../finallica-agent-repo (agent/repo-manager)"
+    echo "     Intent: Repository management agent improvements"
+    echo "     Recommended: Claude Sonnet 4 (git workflows)"
+    echo ""
+    echo "  4. ../finallica-integration (test/integration)"
+    echo "     Intent: Test agent integration"
+    echo "     Recommended: Claude Sonnet 4 (integration testing)"
+    ;;
+  frontend)
+    echo "=== Frontend + API Session ==="
+    echo ""
+    echo "Worktrees:"
+    echo "  1. ../finallica-frontend (feature/frontend-v2)"
+    echo "     Intent: Dashboard UI improvements"
+    echo "     Recommended: GPT-4o or Claude Sonnet 4 (strong CSS/React)"
+    echo ""
+    echo "  2. ../finallica-api (feature/api-routes)"
+    echo "     Intent: New API endpoints for dashboard"
+    echo "     Recommended: Claude Sonnet 4 or GPT-4o (API design)"
+    echo ""
+    echo "  3. ../finallica-integration (test/integration)"
+    echo "     Intent: API-frontend integration tests"
+    echo "     Recommended: Claude Sonnet 4 (end-to-end validation)"
+    ;;
+  cost-optimized)
+    echo "=== Cost-Optimized Session ==="
+    echo ""
+    echo "Worktrees:"
+    echo "  1. ../finallica-agent-docs (agent/documentation)"
+    echo "     Intent: Documentation generation"
+    echo "     Recommended: Local LLaMA or Claude Haiku (free/cheap)"
+    echo ""
+    echo "  2. ../finallica-agent-viz (agent/visualization)"
+    echo "     Intent: Simple visualization code"
+    echo "     Recommended: GPT-4o-mini (very low cost)"
+    echo ""
+    echo "  3. ../finallica-cli (feature/cli-enhancements)"
+    echo "     Intent: CLI command additions"
+    echo "     Recommended: Claude Haiku (fast, cheap)"
+    ;;
+  debug)
+    echo "=== Debugging Session ==="
+    echo ""
+    echo "Worktrees:"
+    echo "  1. ../finallica-agent-debug (agent/debugger)"
+    echo "     Intent: Debugger agent improvements"
+    echo "     Recommended: Claude Sonnet 4 or o1-preview (strong reasoning)"
+    echo ""
+    echo "  2. ../finallica-core-scheduler (core/scheduler)"
+    echo "     Intent: Task queuing, priority management"
+    echo "     Recommended: Claude Sonnet 4 (queue logic)"
+    echo ""
+    echo "  3. ../finallica-integration (test/integration)"
+    echo "     Intent: Integration testing for bug fixes"
+    echo "     Recommended: Claude Sonnet 4 (system understanding)"
+    ;;
+  list)
+    echo "=== Available Sessions ==="
+    echo ""
+    echo "  core           - Core infrastructure (high-reasoning models)"
+    echo "  agents         - Agent development (mixed models)"
+    echo "  frontend       - Frontend + API (frontend-optimized models)"
+    echo "  cost-optimized - Cost-effective work (cheap/free models)"
+    echo "  debug          - Debugging & scheduler (reasoning models)"
+    echo ""
+    echo "Usage: ./worktree-session <session-name>"
+    ;;
+  *)
+    echo "Usage: ./worktree-session (core|agents|frontend|cost-optimized|debug|list)"
+    echo ""
+    echo "Available sessions:"
+    echo "  core           - Core infrastructure (high-reasoning models)"
+    echo "  agents         - Agent development (mixed models)"
+    echo "  frontend       - Frontend + API (frontend-optimized models)"
+    echo "  cost-optimized - Cost-effective work (cheap/free models)"
+    echo "  debug          - Debugging & scheduler (reasoning models)"
+    echo ""
+    echo "Run './worktree-session list' for detailed session information"
+    exit 1
+    ;;
+esac

@@ -51,6 +51,15 @@ const BudgetManager = require('./services/budget-manager');
 const AgentFleetService = require('./services/agent-fleet-service');
 const AgentScheduler = require('./services/agent-scheduler');
 
+// ============================================
+// SHARE & COMMAND SYSTEM (OpenCode-style)
+// ============================================
+
+const ShareService = require('./services/share-service');
+const CommandRegistry = require('./services/command-registry');
+const createShareRoutes = require('./routes/share');
+const createCommandRoutes = require('./routes/commands');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -294,9 +303,172 @@ async function initializeAgentFleetSystem() {
             res.json({ tasks });
         });
 
+        // Share & Command integration with Agent Fleet
+        app.post('/api/agent-fleet/share', async (req, res) => {
+            try {
+                const { title, isPublic, expirationHours } = req.body;
+                const share = await agentFleet.shareSession({ title, isPublic, expirationHours });
+                res.json({ success: true, share });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.get('/api/agent-fleet/share', async (req, res) => {
+            try {
+                const currentShare = agentFleet.getCurrentShare();
+                res.json({ share: currentShare });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.delete('/api/agent-fleet/share', async (req, res) => {
+            try {
+                const unshared = await agentFleet.unshareSession();
+                res.json({ success: unshared });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.get('/api/agent-fleet/messages', async (req, res) => {
+            try {
+                const messages = agentFleet.getSessionMessages();
+                res.json({ messages });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.post('/api/agent-fleet/commands/:name/execute', async (req, res) => {
+            try {
+                const { args } = req.body;
+                const result = await agentFleet.executeCommand(req.params.name, args || {});
+                res.json({ success: true, result });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.get('/api/agent-fleet/commands', async (req, res) => {
+            try {
+                const { agentType } = req.query;
+                const commands = await agentFleet.listCommands(agentType);
+                res.json({ commands });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
         console.log('Agent Fleet System initialized');
     } catch (error) {
         console.error('Failed to initialize Agent Fleet System:', error);
+    }
+}
+
+// ============================================
+// SHARE & COMMAND SYSTEM INITIALIZATION
+// ============================================
+
+let shareService, commandRegistry;
+
+async function initializeShareAndCommandSystem() {
+    try {
+        // Initialize Share Service
+        shareService = new ShareService(db);
+
+        // Initialize Command Registry
+        commandRegistry = new CommandRegistry(db);
+        await commandRegistry.initialize();
+
+        // Wire up share services to agent fleet if it exists
+        if (agentFleet) {
+            agentFleet.setShareServices(shareService, commandRegistry);
+        }
+
+        // Register Share routes
+        app.use('/api/share', createShareRoutes(shareService));
+
+        // Register Command routes
+        app.use('/api/commands', createCommandRoutes(commandRegistry));
+
+        // Public share view (no auth required)
+        app.get('/s/:id', async (req, res) => {
+            try {
+                const share = await shareService.getShare(req.params.id);
+
+                if (!share) {
+                    return res.status(404).send(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Share Not Found</title></head>
+                        <body>
+                            <h1>Share Not Found</h1>
+                            <p>This share may have expired or been deleted.</p>
+                            <a href="/">Go to Finallica</a>
+                        </body>
+                        </html>
+                    `);
+                }
+
+                // Record view
+                await shareService.recordView(req.params.id);
+
+                const messages = await shareService.getShareMessages(req.params.id);
+
+                // Send HTML view
+                res.send(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Shared Session: ${share.title || share.id}</title>
+                        <style>
+                            body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                            .header { border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
+                            .message { margin: 20px 0; padding: 15px; border-radius: 8px; }
+                            .message.user { background: #f0f0f0; }
+                            .message.assistant { background: #e3f2fd; }
+                            .message.system { background: #fff3e0; font-style: italic; }
+                            .role { font-weight: bold; color: #666; font-size: 0.9em; }
+                            .content { margin-top: 8px; white-space: pre-wrap; }
+                            .metadata { color: #999; font-size: 0.85em; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h1>${share.title || 'Shared Session'}</h1>
+                            <p class="metadata">
+                                Created: ${new Date(share.created_at * 1000).toLocaleString()} |
+                                Views: ${share.view_count}
+                            </p>
+                        </div>
+                        ${messages.map(msg => `
+                            <div class="message ${msg.role}">
+                                <div class="role">${msg.role}</div>
+                                <div class="content">${escapeHtml(msg.content)}</div>
+                            </div>
+                        `).join('')}
+                        <hr>
+                        <p><a href="/">Open in Finallica</a></p>
+                    </body>
+                    </html>
+                `);
+            } catch (error) {
+                console.error('Error viewing share:', error);
+                res.status(500).send('Error loading share');
+            }
+        });
+
+        function escapeHtml(text) {
+            const div = { innerHTML: '' };
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        console.log('Share & Command System initialized');
+    } catch (error) {
+        console.error('Failed to initialize Share & Command System:', error);
     }
 }
 
@@ -1501,6 +1673,9 @@ async function start() {
     // Initialize agent fleet system
     await initializeAgentFleetSystem();
 
+    // Initialize share and command system
+    await initializeShareAndCommandSystem();
+
     // Load documents on startup
     await loadDocuments();
 
@@ -1522,6 +1697,9 @@ async function start() {
 ║  • AI chat assistant                                         ║
 ║  • Real-time collaboration via WebSocket                     ║
 ║  • Consensus voting on changes                               ║
+║  • Session sharing (like /share)                             ║
+║  • Custom commands with /<command>                           ║
+║  • Public share URLs at /s/<id>                              ║
 ║                                                              ║
 ║  Press Ctrl+C to stop                                        ║
 ╚══════════════════════════════════════════════════════════════╝

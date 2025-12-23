@@ -1,0 +1,102 @@
+name: Agent Worktree Tests
+
+on:
+  push:
+    branches:
+      - 'agent/**'
+  pull_request:
+    branches:
+      - 'agent/**'
+
+jobs:
+  # Extract agent type from branch name
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      agent-type: ${{ steps.extract-type.outputs.agent-type }}
+    steps:
+      - name: Extract agent type from branch
+        id: extract-type
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          AGENT_TYPE="${BRANCH#agent/}"
+          echo "agent-type=${AGENT_TYPE}" >> $GITHUB_OUTPUT
+          echo "Agent type: ${AGENT_TYPE}"
+
+  test:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          bun install
+
+      - name: Run agent-specific tests
+        run: |
+          AGENT_TYPE="${{ needs.setup.outputs.agent-type }}"
+          echo "Testing agent: ${AGENT_TYPE}"
+
+          # Check if agent file exists
+          if [ -f "backend/services/agents/${AGENT_TYPE}-agent.js" ]; then
+            echo "Agent file found"
+            # Run syntax check
+            node -c backend/services/agents/${AGENT_TYPE}-agent.js
+          else
+            echo "Warning: Agent file not found for ${AGENT_TYPE}"
+          fi
+
+      - name: Run linting
+        run: |
+          cd backend
+          if [ -f "services/agents/${{ needs.setup.outputs.agent-type }}-agent.js" ]; then
+            bun run lint -- "services/agents/${{ needs.setup.outputs.agent-type }}-agent.js" || true
+          fi
+        continue-on-error: true
+
+  integration:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          bun install
+
+      - name: Verify agent base class compatibility
+        run: |
+          AGENT_TYPE="${{ needs.setup.outputs.agent-type }}"
+          AGENT_FILE="backend/services/agents/${AGENT_TYPE}-agent.js"
+
+          if [ -f "$AGENT_FILE" ]; then
+            # Check if agent extends BaseAgent
+            if grep -q "extends.*BaseAgent" "$AGENT_FILE"; then
+              echo "✓ Agent extends BaseAgent"
+            else
+              echo "✗ Warning: Agent should extend BaseAgent"
+              exit 1
+            fi
+
+            # Check for required methods
+            if grep -q "async execute(" "$AGENT_FILE"; then
+              echo "✓ Agent has execute() method"
+            else
+              echo "✗ Warning: Agent should have execute() method"
+              exit 1
+            fi
+          fi
