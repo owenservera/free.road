@@ -1,0 +1,165 @@
+{
+  "id": "infrastructure",
+  "name": "Infrastructure Engine",
+  "version": "1.0.0",
+  "description": "Core platform infrastructure for Finallica",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["infrastructure", "platform", "core"],
+  "repository": "https://github.com/finallica/finallica-webapp",
+  "documentation": "https://docs.finallica.io/infrastructure",
+  "engine": "platform",
+  "type": "core",
+  "dependencies": [],
+  "engines": {
+    "system": "node",
+    "node": ">=18.0.0"
+  },
+  "main": "./index.js",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "schemas"
+  ],
+  "config": {
+    "database": {
+      "type": "sqlite",
+      "path": "./database.sqlite"
+    },
+    "logging": {
+      "level": "info",
+      "format": "json"
+    },
+    "monitoring": {
+      "enabled": true,
+      "interval": 30000
+    },
+    "backup": {
+      "enabled": true,
+      "schedule": "0 2 * * *",
+      "retention": 7
+    }
+  },
+  "schemas": {
+    "database": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["sqlite", "postgres", "mysql"] },
+        "path": { "type": "string" },
+        "url": { "type": "string" }
+      },
+      "required": ["type"]
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "level": { "type": "string", "enum": ["error", "warn", "info", "debug"] },
+        "format": { "type": "string", "enum": ["json", "text"] }
+      },
+      "required": ["level"]
+    }
+  },
+  "defaults": {
+    "database": {
+      "type": "sqlite",
+      "path": "./database.sqlite"
+    },
+    "logging": {
+      "level": "info",
+      "format": "json"
+    },
+    "monitoring": {
+      "enabled": true,
+      "interval": 30000
+    },
+    "backup": {
+      "enabled": true,
+      "schedule": "0 2 * * *",
+      "retention": 7
+    }
+  },
+  "activation": "on-start",
+  "critical": true,
+  "singleton": true,
+  "api": {
+    "health": "/api/health",
+    "metrics": "/api/metrics",
+    "backup": "/api/backup"
+  },
+  "routes": [
+    {
+      "path": "/api/health",
+      "method": "GET",
+      "handler": "healthCheck"
+    },
+    {
+      "path": "/api/metrics",
+      "method": "GET",
+      "handler": "getMetrics"
+    },
+    {
+      "path": "/api/backup",
+      "method": "POST",
+      "handler": "createBackup"
+    }
+  ],
+  "services": [
+    {
+      "name": "database",
+      "path": "./services/database.js"
+    },
+    {
+      "name": "logger",
+      "path": "./services/logger.js"
+    },
+    {
+      "name": "monitoring",
+      "path": "./services/monitoring.js"
+    },
+    {
+      "name": "backup",
+      "path": "./services/backup.js"
+    }
+  ],
+  "hooks": [
+    {
+      "event": "engine:initialized",
+      "handler": "onInitialized"
+    },
+    {
+      "event": "engine:started",
+      "handler": "onStarted"
+    },
+    {
+      "event": "engine:stopped",
+      "handler": "onStopped"
+    }
+  ],
+  "extensions": [],
+  "tags": ["infrastructure", "core", "platform"],
+  "categories": ["platform"],
+  "bugs": {
+    "url": "https://github.com/finallica/finallica-webapp/issues"
+  },
+  "contributors": [
+    {
+      "name": "Finallica Team",
+      "email": "team@finallica.io"
+    }
+  ],
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "nodemon": "^2.0.0",
+    "eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

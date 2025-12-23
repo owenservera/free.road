@@ -1,5 +1,54 @@
 # Finallica Web App - Project Instructions
 
+## System Environment & Session Configuration
+
+> **This session begins with system identification and configuration.** Since this tool will be deployed in different systems with different settings, each session must identify the environment and update CLAUDE.md to optimize for that particular setup.
+
+### System Identification
+
+**Current System:** [Replace with system identifier - e.g., VIVIM-Dev-Workstation, VIVIM-Cloud-Prod, CI-Runner-1]
+**Deployment Type:** [Self-hosted, Cloud, Local, CI/CD]
+**Primary Development Environment:** [CLI, IDE, Web Interface, API]
+
+### Core AI Editor Settings
+
+- **Model Preference:** [Auto-detected or specified model]
+- **Code Style:** [Auto-formatting, Linter integration, ESLint config]
+- **Language Preferences:** [JavaScript/TypeScript, Bun only, Node.js versions]
+- **Git Workflow:** [Standard commits, Conventional Commits, Squash merging]
+- **Testing Framework:** [Testing strategy, test command]
+- **Build System:** [Bun commands, build scripts, deployment targets]
+- **IDE/Editor Integration:** [Language server, autocomplete, code intelligence]
+
+### Dynamic Configuration
+
+This CLAUDE.md file should be updated at the beginning of each session to include:
+
+```markdown
+## Session Configuration (Auto-generated)
+
+### System Info
+- **System:** [System identifier]
+- **Environment:** [Development/Staging/Production]
+- **Model:** [Active AI model]
+- **Worktree:** [Current worktree if applicable]
+- **Branch:** [Current branch]
+
+### Project-Specific Settings
+- **Package Manager:** [Detected package manager]
+- **Dependencies:** [Checked dependencies]
+- **Scripts:** [Available scripts]
+- **Port:** [Active port]
+- **API Keys:** [Key vault status]
+```
+
+> **When deploying to new systems:**
+> 1. Update the System Identification section
+> 2. Configure Core AI Editor Settings for the environment
+> 3. Run `bun install --frozen-lockfile` for consistent dependencies
+> 4. Verify system-specific configurations
+> 5. Update this configuration at the start of each session
+
 ## Open Source Philosophy
 
 **Finallica is a public open source project. All are welcome.**
