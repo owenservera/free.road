@@ -10,12 +10,31 @@ const diff = require('diff');
 const fs = require('fs').promises;
 const path = require('path');
 
+// Multi-Repository System
+const db = require('./database');
+const GitSyncService = require('./services/git-sync');
+const RepositoryService = require('./services/repository-service');
+const createRepositoryRoutes = require('./routes/repositories');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const PORT = 3000;
 const DOCS_PATH = path.join(__dirname, '../docs/finallica');
+
+// Configuration
+const CONFIG = {
+    VOTING_PERIOD: 7 * 24 * 60 * 60 * 1000, // 7 days
+    QUORUM_PCT: 0.67, // 67%
+    MIN_STAKE_PROPOSAL: 1000,
+    MIN_STAKE_VR: 500000,
+    MIN_STAKE_SE: 2000000,
+    // AI Provider: 'claude' (Anthropic), 'openai', or 'demo'
+    AI_PROVIDER: process.env.AI_PROVIDER || 'demo',
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+};
 
 // State
 const state = {
@@ -34,6 +53,30 @@ const state = {
     activity: [],
     clients: new Set()
 };
+
+// ============================================
+// MULTI-REPOSITORY SYSTEM INITIALIZATION
+// ============================================
+
+let gitSync, repositoryService;
+
+async function initializeRepositorySystem() {
+    try {
+        // Initialize database
+        await db.initialize();
+
+        // Initialize services
+        gitSync = new GitSyncService(db);
+        repositoryService = new RepositoryService(db, gitSync);
+
+        // Register routes
+        app.use('/api/repositories', createRepositoryRoutes(db, repositoryService, gitSync));
+
+        console.log('Multi-repository system initialized');
+    } catch (error) {
+        console.error('Failed to initialize repository system:', error);
+    }
+}
 
 // Middleware
 app.use(cors());
@@ -271,41 +314,357 @@ app.get('/api/consensus', (req, res) => {
 // AI CHAT ROUTES
 // ============================================
 
+// AI Provider Configuration
+const AI_PROVIDERS = {
+    anthropic: {
+        name: 'Anthropic Claude',
+        baseUrl: 'https://api.anthropic.com/v1/messages',
+        models: {
+            'claude-sonnet-4-20250514': { name: 'Claude Sonnet 4', maxTokens: 200000, contextWindow: 200000 },
+            'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet', maxTokens: 200000, contextWindow: 200000 },
+            'claude-3-5-haiku-20241022': { name: 'Claude 3.5 Haiku', maxTokens: 200000, contextWindow: 200000 },
+            'claude-3-opus-20240229': { name: 'Claude 3 Opus', maxTokens: 200000, contextWindow: 200000 }
+        },
+        headers: (apiKey) => ({
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+        })
+    },
+    openai: {
+        name: 'OpenAI GPT',
+        baseUrl: 'https://api.openai.com/v1/chat/completions',
+        models: {
+            'gpt-4o': { name: 'GPT-4o', maxTokens: 128000, contextWindow: 128000 },
+            'gpt-4o-mini': { name: 'GPT-4o Mini', maxTokens: 128000, contextWindow: 128000 },
+            'gpt-4-turbo': { name: 'GPT-4 Turbo', maxTokens: 128000, contextWindow: 128000 },
+            'gpt-3.5-turbo': { name: 'GPT-3.5 Turbo', maxTokens: 16385, contextWindow: 16385 }
+        },
+        headers: (apiKey) => ({
+            'Authorization': `Bearer ${apiKey}`,
+            'content-type': 'application/json'
+        })
+    },
+    openrouter: {
+        name: 'OpenRouter',
+        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+        models: {
+            'anthropic/claude-sonnet-4': { name: 'Claude Sonnet 4 (via OpenRouter)', maxTokens: 200000, contextWindow: 200000 },
+            'anthropic/claude-3.5-sonnet': { name: 'Claude 3.5 Sonnet (via OpenRouter)', maxTokens: 200000, contextWindow: 200000 },
+            'openai/gpt-4o': { name: 'GPT-4o (via OpenRouter)', maxTokens: 128000, contextWindow: 128000 },
+            'google/gemini-pro-1.5': { name: 'Gemini Pro 1.5 (via OpenRouter)', maxTokens: 1000000, contextWindow: 1000000 },
+            'meta-llama/llama-3.1-70b-instruct': { name: 'Llama 3.1 70B (via OpenRouter)', maxTokens: 131072, contextWindow: 131072 }
+        },
+        headers: (apiKey) => ({
+            'Authorization': `Bearer ${apiKey}`,
+            'content-type': 'application/json',
+            'HTTP-Referer': 'https://finallica.io',
+            'X-Title': 'Finallica Documentation'
+        })
+    },
+    groq: {
+        name: 'Groq',
+        baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+        models: {
+            'llama-3.3-70b-versatile': { name: 'Llama 3.3 70B', maxTokens: 131072, contextWindow: 131072 },
+            'llama-3.1-70b-versatile': { name: 'Llama 3.1 70B', maxTokens: 131072, contextWindow: 131072 },
+            'mixtral-8x7b-32768': { name: 'Mixtral 8x7b', maxTokens: 32768, contextWindow: 32768 }
+        },
+        headers: (apiKey) => ({
+            'Authorization': `Bearer ${apiKey}`,
+            'content-type': 'application/json'
+        })
+    }
+};
+
+// API Key Management (with rotation)
+class APIKeyManager {
+    constructor() {
+        this.keys = this.loadKeys();
+        this.currentIndex = {};
+        this.usageStats = {};
+        this.failedKeys = new Set();
+    }
+
+    loadKeys() {
+        const keys = {
+            anthropic: (process.env.ANTHROPIC_API_KEYS || '').split(',').filter(k => k.trim()),
+            openai: (process.env.OPENAI_API_KEYS || '').split(',').filter(k => k.trim()),
+            openrouter: (process.env.OPENROUTER_API_KEYS || '').split(',').filter(k => k.trim()),
+            groq: (process.env.GROQ_API_KEYS || '').split(',').filter(k => k.trim())
+        };
+        // Support single key format too
+        if (process.env.ANTHROPIC_API_KEY && !keys.anthropic.length) {
+            keys.anthropic = [process.env.ANTHROPIC_API_KEY];
+        }
+        if (process.env.OPENAI_API_KEY && !keys.openai.length) {
+            keys.openai = [process.env.OPENAI_API_KEY];
+        }
+        if (process.env.OPENROUTER_API_KEY && !keys.openrouter.length) {
+            keys.openrouter = [process.env.OPENROUTER_API_KEY];
+        }
+        if (process.env.GROQ_API_KEY && !keys.groq.length) {
+            keys.groq = [process.env.GROQ_API_KEY];
+        }
+        return keys;
+    }
+
+    getNextKey(provider) {
+        const providerKeys = this.keys[provider];
+        if (!providerKeys || providerKeys.length === 0) {
+            return null;
+        }
+
+        // Skip failed keys
+        const availableKeys = providerKeys.filter(k => !this.failedKeys.has(k));
+        if (availableKeys.length === 0) {
+            // Reset failed keys and try again
+            this.failedKeys.clear();
+            return providerKeys[0];
+        }
+
+        if (!this.currentIndex[provider]) {
+            this.currentIndex[provider] = 0;
+        }
+
+        // Round-robin selection
+        const key = availableKeys[this.currentIndex[provider] % availableKeys.length];
+        this.currentIndex[provider] = (this.currentIndex[provider] + 1) % availableKeys.length;
+
+        return key;
+    }
+
+    markFailed(key) {
+        this.failedKeys.add(key);
+    }
+
+    recordUsage(provider, model, inputTokens, outputTokens) {
+        const key = `${provider}:${model}`;
+        if (!this.usageStats[key]) {
+            this.usageStats[key] = { requests: 0, inputTokens: 0, outputTokens: 0 };
+        }
+        this.usageStats[key].requests++;
+        this.usageStats[key].inputTokens += inputTokens;
+        this.usageStats[key].outputTokens += outputTokens;
+    }
+
+    getStats() {
+        return this.usageStats;
+    }
+
+    hasKeys(provider) {
+        return this.keys[provider] && this.keys[provider].length > 0;
+    }
+
+    getAvailableProviders() {
+        return Object.entries(this.keys)
+            .filter(([_, keys]) => keys.length > 0)
+            .map(([provider, _]) => provider);
+    }
+}
+
+const keyManager = new APIKeyManager();
+
+// Default model configuration
+const DEFAULT_MODEL = process.env.AI_MODEL || 'claude-3-5-sonnet-20241022';
+const DEFAULT_PROVIDER = process.env.AI_PROVIDER || 'anthropic';
+
+// Chat endpoint with model selection
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, context } = req.body;
+        const { message, context, provider, model, stream = false } = req.body;
 
-        // Build context from documents
-        const docContext = Object.entries(state.documents)
-            .map(([name, content]) => `## ${name}\n${content.substring(0, 500)}...`)
-            .join('\n\n');
+        const selectedProvider = provider || DEFAULT_PROVIDER;
+        const selectedModel = model || DEFAULT_MODEL;
 
-        const systemPrompt = `You are Finallica AI, an expert assistant for the Finallica financial privacy network.
-You help users understand the architecture, protocols, and technical specifications.
+        // Check if provider has keys
+        if (!keyManager.hasKeys(selectedProvider)) {
+            return res.status(400).json({
+                error: `No API keys configured for provider: ${selectedProvider}`,
+                availableProviders: keyManager.getAvailableProviders()
+            });
+        }
 
-Key concepts:
-- Finallica is a global payment network with 127 shards and ~12,000 Validator-Routers
-- Uses BLS12-381 for stake attestations, Noise_XX for handshakes, ChaCha20-Poly1305 for encryption
-- HotStuff BFT consensus with 8 notaries, 200ms finality
-- 3-hop payment channels with HTLC locks
-- Pedersen commitments for amount hiding
-- Anonymity set of ~1,200 users
+        // Build system prompt with document context
+        const systemPrompt = buildSystemPrompt();
 
-Answer questions clearly and technically. Use code examples when helpful.
+        // Get conversation history from context if available
+        const messages = context && context.history ? context.history : [];
 
-Available documents:
-${Object.keys(state.documents).map(d => '- ' + d).join('\n')}
-`;
+        // Call the appropriate AI provider
+        const response = await callAIProvider(selectedProvider, selectedModel, systemPrompt, message, messages);
 
-        // In production, send to actual AI API (Claude, GPT, etc.)
-        // For demo, generate contextual response
-        const response = await generateAIResponse(message, context, docContext);
-
-        res.json({ response });
+        res.json({
+            response: response.content,
+            model: response.model,
+            provider: selectedProvider,
+            tokensUsed: response.tokens
+        });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to process message' });
+        console.error('AI chat error:', error);
+        res.status(500).json({
+            error: error.message,
+            fallback: await generateDemoResponse(message)
+        });
     }
 });
+
+// Get available models endpoint
+app.get('/api/ai/models', (req, res) => {
+    const available = {};
+    const providers = keyManager.getAvailableProviders();
+
+    for (const provider of providers) {
+        available[provider] = {
+            name: AI_PROVIDERS[provider].name,
+            models: AI_PROVIDERS[provider].models
+        };
+    }
+
+    res.json({ providers: available, defaults: { provider: DEFAULT_PROVIDER, model: DEFAULT_MODEL } });
+});
+
+// Get AI usage stats endpoint
+app.get('/api/ai/stats', (req, res) => {
+    res.json({ stats: keyManager.getStats(), availableProviders: keyManager.getAvailableProviders() });
+});
+
+function buildSystemPrompt() {
+    const docList = Object.keys(state.documents).map(d => `- ${d}`).join('\n');
+
+    // Get full content of key documents for context
+    const keyDocs = ['README.md', 'ARCHITECTURE_OVERVIEW.md', 'CRYPTOGRAPHIC_DETAILS.md'];
+    const relevantContext = keyDocs
+        .filter(doc => state.documents[doc])
+        .map(doc => `## ${doc}\n${state.documents[doc].substring(0, 3000)}`)
+        .join('\n\n---\n\n');
+
+    return `You are Finallica AI, an expert assistant for the Finallica global financial privacy network.
+
+Your role is to help users understand the architecture, protocols, and technical specifications of Finallica.
+
+Key concepts:
+- Finallica is a global, trust-minimized payment overlay network with 127 jurisdictional shards
+- ~12,000 Validator-Routers (VRs) form a clique mesh topology
+- HotStuff BFT consensus with 8 notaries achieving 200ms finality
+- Cryptography: BLS12-381 for signatures, Noise_XX for handshakes, ChaCha20-Poly1305 for encryption
+- 3-hop payment channels with HTLC locks for privacy
+- Pedersen commitments and Bulletproofs+ for amount hiding
+- Anonymity set of ~1,200 users per transaction
+
+Relevant documentation:
+${relevantContext}
+
+Available documents:
+${docList}
+
+Answer questions clearly and technically. Use code examples when helpful. Reference specific documents when citing information.
+`;
+}
+
+async function callAIProvider(provider, model, systemPrompt, userMessage, history = []) {
+    const providerConfig = AI_PROVIDERS[provider];
+    const apiKey = keyManager.getNextKey(provider);
+
+    if (!apiKey) {
+        throw new Error(`No API key available for provider: ${provider}`);
+    }
+
+    // Build messages array
+    let messages = [];
+    let apiUrl = providerConfig.baseUrl;
+
+    if (provider === 'anthropic') {
+        // Anthropic format
+        messages = [
+            { role: 'user', content: `${systemPrompt}\n\nUser: ${userMessage}` }
+        ];
+
+        // Add conversation history if available
+        if (history.length > 0) {
+            const historyText = history.map(h => `${h.role}: ${h.content}`).join('\n\n');
+            messages[0].content = `${systemPrompt}\n\nConversation history:\n${historyText}\n\nCurrent question: ${userMessage}`;
+        }
+
+        const requestBody = {
+            model: model,
+            max_tokens: 4096,
+            messages: messages
+        };
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: providerConfig.headers(apiKey),
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            if (response.status === 401 || response.status === 403) {
+                keyManager.markFailed(apiKey);
+            }
+            throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+        }
+
+        const data = await response.json();
+        keyManager.recordUsage(provider, model, data.usage?.input_tokens || 0, data.usage?.output_tokens || 0);
+
+        return {
+            content: data.content[0].text,
+            model: model,
+            tokens: {
+                input: data.usage?.input_tokens || 0,
+                output: data.usage?.output_tokens || 0
+            }
+        };
+
+    } else {
+        // OpenAI-compatible format (OpenAI, OpenRouter, Groq)
+        messages = [
+            { role: 'system', content: systemPrompt },
+            ...history.slice(-10), // Last 10 messages
+            { role: 'user', content: userMessage }
+        ];
+
+        const requestBody = {
+            model: model,
+            messages: messages,
+            max_tokens: 4096,
+            temperature: 0.7
+        };
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: providerConfig.headers(apiKey),
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            if (response.status === 401 || response.status === 403) {
+                keyManager.markFailed(apiKey);
+            }
+            throw new Error(`${providerConfig.name} API error: ${response.status} - ${error}`);
+        }
+
+        const data = await response.json();
+        keyManager.recordUsage(provider, model, data.usage?.prompt_tokens || 0, data.usage?.completion_tokens || 0);
+
+        return {
+            content: data.choices[0].message.content,
+            model: model,
+            tokens: {
+                input: data.usage?.prompt_tokens || 0,
+                output: data.usage?.completion_tokens || 0
+            }
+        };
+    }
+}
+
+// Demo fallback response (when no API keys available)
+async function generateDemoResponse(message) {
+    return await generateAIResponse(message, null, '');
+}
 
 async function generateAIResponse(message, context, docContext) {
     // Simple demo response generator
@@ -649,6 +1008,9 @@ wss.on('connection', (ws) => {
 // ============================================
 
 async function start() {
+    // Initialize multi-repository system
+    await initializeRepositorySystem();
+
     // Load documents on startup
     await loadDocuments();
 
@@ -664,6 +1026,7 @@ async function start() {
 ║  Frontend: http://localhost:8080                            ║
 ║                                                              ║
 ║  Features:                                                   ║
+║  • Multi-repository documentation platform                   ║
 ║  • Document management with Git integration                  ║
 ║  • Proposal system with blockchain voting                    ║
 ║  • AI chat assistant                                         ║

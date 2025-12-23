@@ -21,7 +21,12 @@ const state = {
     proposals: {},
     consensus: {},
     chatHistory: [],
-    activity: []
+    activity: [],
+    // AI Configuration
+    aiProviders: {},
+    aiDefaults: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
+    selectedProvider: null,
+    selectedModel: null
 };
 
 // Utility Functions
@@ -439,24 +444,45 @@ async function sendChatMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message,
+                provider: state.selectedProvider || state.aiDefaults.provider,
+                model: state.selectedModel || state.aiDefaults.model,
                 context: {
                     currentDoc: state.currentDoc,
                     documents: Object.keys(state.documents),
-                    proposals: state.proposals
+                    proposals: state.proposals,
+                    history: state.chatHistory.slice(-20) // Last 20 messages
                 }
             })
         });
 
         const data = await response.json();
         hideTyping();
-        addChatMessage('ai', data.response);
 
-        state.chatHistory.push({ role: 'user', content: message });
-        state.chatHistory.push({ role: 'assistant', content: data.response });
+        if (data.error && data.fallback) {
+            // Using fallback demo mode
+            addChatMessage('ai', data.fallback);
+            showToast(`AI API Error: ${data.error}. Using demo mode.`, 'warning');
+            state.chatHistory.push({ role: 'user', content: message });
+            state.chatHistory.push({ role: 'assistant', content: data.fallback });
+        } else if (data.error) {
+            addChatMessage('system', `Error: ${data.error}`);
+            showToast(data.error, 'error');
+        } else {
+            addChatMessage('ai', data.response);
+            state.chatHistory.push({ role: 'user', content: message });
+            state.chatHistory.push({ role: 'assistant', content: data.response });
+
+            // Show token usage if available
+            if (data.tokensUsed) {
+                const tokenInfo = `${data.tokensUsed.input + data.tokensUsed.output} tokens (${data.tokensUsed.input} in, ${data.tokensUsed.out} out)`;
+                showToast(tokenInfo, 'info');
+            }
+        }
     } catch (error) {
         console.error('Chat error:', error);
         hideTyping();
         addChatMessage('system', 'Sorry, I encountered an error. Please try again.');
+        showToast('Chat error: ' + error.message, 'error');
     }
 }
 
@@ -806,6 +832,80 @@ function generateId() {
 }
 
 // ============================================
+// ============================================
+// AI MODEL MANAGEMENT
+// ============================================
+
+async function loadAIModels() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/ai/models`);
+        const data = await response.json();
+
+        state.aiProviders = data.providers || {};
+        state.aiDefaults = data.defaults || { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' };
+
+        // Set default selections
+        state.selectedProvider = state.aiDefaults.provider;
+        state.selectedModel = state.aiDefaults.model;
+
+        renderModelSelector();
+    } catch (error) {
+        console.error('Failed to load AI models:', error);
+        // Use demo mode defaults
+        renderModelSelector();
+    }
+}
+
+function renderModelSelector() {
+    const container = $('#aiModelSelector');
+    if (!container) return;
+
+    const providers = Object.entries(state.aiProviders);
+    if (providers.length === 0) {
+        container.innerHTML = '<div class="ai-status">Demo Mode (no API keys)</div>';
+        return;
+    }
+
+    let html = '<div class="ai-selector">';
+
+    // Provider dropdown
+    html += '<select id="aiProvider" class="ai-select">';
+    for (const [id, config] of providers) {
+        const selected = id === state.selectedProvider ? 'selected' : '';
+        html += `<option value="${id}" ${selected}>${config.name}</option>`;
+    }
+    html += '</select>';
+
+    // Model dropdown (will be populated by provider selection)
+    html += '<select id="aiModel" class="ai-select">';
+    const currentProvider = state.aiProviders[state.selectedProvider];
+    if (currentProvider && currentProvider.models) {
+        for (const [id, config] of Object.entries(currentProvider.models)) {
+            const selected = id === state.selectedModel ? 'selected' : '';
+            html += `<option value="${id}" ${selected}>${config.name}</option>`;
+        }
+    }
+    html += '</select>';
+
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Add event listeners
+    $('#aiProvider')?.addEventListener('change', (e) => {
+        state.selectedProvider = e.target.value;
+        const provider = state.aiProviders[e.target.value];
+        const firstModel = Object.keys(provider.models)[0];
+        state.selectedModel = firstModel;
+        renderModelSelector();
+    });
+
+    $('#aiModel')?.addEventListener('change', (e) => {
+        state.selectedModel = e.target.value;
+    });
+}
+
+// ============================================
 // INITIALIZATION
 // ============================================
 
@@ -861,6 +961,7 @@ function init() {
     loadDocuments();
     loadProposals();
     loadConsensus();
+    loadAIModels();
     renderActivity();
     connectWebSocket();
 }

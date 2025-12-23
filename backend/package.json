@@ -1,0 +1,25 @@
+{
+  "name": "finallica-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Finallica documentation system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "ws": "^8.14.2",
+    "simple-git": "^3.19.1",
+    "diff": "^5.1.0",
+    "marked": "^9.1.6",
+    "sql.js": "^1.10.3",
+    "adm-zip": "^0.5.10",
+    "tar": "^6.2.0",
+    "octokit": "^3.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
