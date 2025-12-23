@@ -934,6 +934,49 @@ class DatabaseManager {
         }
     }
 
+    getAllAgentTasks() {
+        const stmt = this.db.prepare('SELECT * FROM agent_tasks ORDER BY created_at DESC');
+        const tasks = [];
+        while (stmt.step()) {
+            const task = stmt.getAsObject();
+            task.task_data = JSON.parse(task.task_data || '{}');
+            task.result_json = JSON.parse(task.result_json || '{}');
+            tasks.push(task);
+        }
+        stmt.free();
+        return tasks;
+    }
+
+    async deleteAgentTask(taskId) {
+        this.db.run('DELETE FROM agent_tasks WHERE id = :id', { ':id': taskId });
+        await this.save();
+    }
+
+    getFailedTasks(limit = 10, agentType = null) {
+        let query = 'SELECT * FROM agent_tasks WHERE status = :status';
+        const params = { ':status': 'failed' };
+
+        if (agentType) {
+            query += ' AND agent_type = :agent_type';
+            params[':agent_type'] = agentType;
+        }
+
+        query += ' ORDER BY created_at DESC LIMIT :limit';
+        params[':limit'] = limit;
+
+        const stmt = this.db.prepare(query);
+        stmt.bind(params);
+        const tasks = [];
+        while (stmt.step()) {
+            const task = stmt.getAsObject();
+            task.task_data = JSON.parse(task.task_data || '{}');
+            task.result_json = JSON.parse(task.result_json || '{}');
+            tasks.push(task);
+        }
+        stmt.free();
+        return tasks;
+    }
+
     // ============================================
     // AGENT FLEET: AGENT COSTS
     // ============================================
@@ -1082,6 +1125,13 @@ class DatabaseManager {
         return session.id;
     }
 
+    getAgentSession(sessionId) {
+        const stmt = this.db.prepare('SELECT * FROM agent_sessions WHERE id = :id');
+        const session = stmt.getAsObject({ ':id': sessionId });
+        stmt.free();
+        return session;
+    }
+
     async logDevModeActivity(sessionId, activityType, data) {
         this.db.run(`
             INSERT INTO dev_mode_activity (session_id, activity_type, data)
@@ -1213,6 +1263,222 @@ class DatabaseManager {
             UPDATE observability_alerts SET acknowledged = 1, acknowledged_at = ?
             WHERE id = ?
         `, [Math.floor(Date.now() / 1000), alertId]);
+        await this.save();
+    }
+
+    // ============================================
+    // DOCUMENT INDEXING (doc_chunks)
+    // ============================================
+
+    async createDocChunk(chunk) {
+        this.db.run(`
+            INSERT INTO doc_chunks (id, doc_id, chunk_index, content, metadata, embedding, hash, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            chunk.id,
+            chunk.docId,
+            chunk.index,
+            chunk.content,
+            JSON.stringify(chunk.metadata || {}),
+            JSON.stringify(chunk.embedding || null),
+            chunk.hash || '',
+            chunk.createdAt || Date.now(),
+            chunk.updatedAt || Date.now()
+        ]);
+        await this.save();
+    }
+
+    getDocChunks(docId) {
+        const stmt = this.db.prepare('SELECT * FROM doc_chunks WHERE doc_id = :doc_id ORDER BY chunk_index');
+        stmt.bind({ ':doc_id': docId });
+        const chunks = [];
+        while (stmt.step()) {
+            const chunk = stmt.getAsObject();
+            try {
+                chunk.metadata = JSON.parse(chunk.metadata || '{}');
+                chunk.embedding = JSON.parse(chunk.embedding || 'null');
+            } catch {
+                chunk.metadata = {};
+                chunk.embedding = null;
+            }
+            chunks.push(chunk);
+        }
+        stmt.free();
+        return chunks;
+    }
+
+    getAllChunks() {
+        const stmt = this.db.prepare('SELECT * FROM doc_chunks ORDER BY doc_id, chunk_index');
+        const chunks = [];
+        while (stmt.step()) {
+            const chunk = stmt.getAsObject();
+            try {
+                chunk.metadata = JSON.parse(chunk.metadata || '{}');
+                chunk.embedding = JSON.parse(chunk.embedding || 'null');
+            } catch {
+                chunk.metadata = {};
+                chunk.embedding = null;
+            }
+            chunks.push(chunk);
+        }
+        stmt.free();
+        return chunks;
+    }
+
+    async deleteDocChunks(docId) {
+        this.db.run('DELETE FROM doc_chunks WHERE doc_id = :doc_id', { ':doc_id': docId });
+        await this.save();
+    }
+
+    async upertDocIndex(docId, hash, chunkCount) {
+        this.db.run(`
+            INSERT INTO doc_index (doc_id, hash, last_indexed, chunk_count)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(doc_id) DO UPDATE SET
+                hash = excluded.hash,
+                last_indexed = excluded.last_indexed,
+                chunk_count = excluded.chunk_count
+        `, [docId, hash, Date.now(), chunkCount]);
+        await this.save();
+    }
+
+    getDocIndex(docId) {
+        const stmt = this.db.prepare('SELECT * FROM doc_index WHERE doc_id = :doc_id');
+        const result = stmt.getAsObject({ ':doc_id': docId });
+        stmt.free();
+        return result && result.doc_id ? result : null;
+    }
+
+    getAllDocIndexes() {
+        const stmt = this.db.prepare('SELECT * FROM doc_index ORDER BY last_indexed DESC');
+        const indexes = [];
+        while (stmt.step()) {
+            indexes.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return indexes;
+    }
+
+    // ============================================
+    // REPOSITORY SUGGESTIONS
+    // ============================================
+
+    async createSuggestionFeedback(feedback) {
+        this.db.run(`
+            INSERT INTO repo_suggestions_feedback (id, session_id, repo_id, action, context, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+            feedback.id,
+            feedback.session_id,
+            feedback.repo_id,
+            feedback.action,
+            feedback.context || '{}',
+            feedback.created_at || Date.now()
+        ]);
+        await this.save();
+    }
+
+    getSuggestionFeedback(sessionId, repoId) {
+        let query = 'SELECT * FROM repo_suggestions_feedback';
+        const params = {};
+
+        if (sessionId && repoId) {
+            query += ' WHERE session_id = :session_id AND repo_id = :repo_id';
+            params[':session_id'] = sessionId;
+            params[':repo_id'] = repoId;
+        } else if (sessionId) {
+            query += ' WHERE session_id = :session_id';
+            params[':session_id'] = sessionId;
+        }
+
+        const stmt = this.db.prepare(query);
+        stmt.bind(params);
+        const feedback = [];
+        while (stmt.step()) {
+            const item = stmt.getAsObject();
+            try {
+                item.context = JSON.parse(item.context || '{}');
+            } catch {
+                item.context = {};
+            }
+            feedback.push(item);
+        }
+        stmt.free();
+        return feedback;
+    }
+
+    getAllSuggestionFeedback() {
+        const stmt = this.db.prepare('SELECT * FROM repo_suggestions_feedback ORDER BY created_at DESC');
+        const feedback = [];
+        while (stmt.step()) {
+            const item = stmt.getAsObject();
+            try {
+                item.context = JSON.parse(item.context || '{}');
+            } catch {
+                item.context = {};
+            }
+            feedback.push(item);
+        }
+        stmt.free();
+        return feedback;
+    }
+
+    async createOrUpdatePopularity(repoId, stats) {
+        this.db.run(`
+            INSERT INTO repo_popularity (repo_id, view_count, add_count, click_count, impression_count, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(repo_id) DO UPDATE SET
+                view_count = view_count + ?,
+                add_count = add_count + ?,
+                click_count = click_count + ?,
+                impression_count = impression_count + ?,
+                last_updated = ?
+        `, [
+            repoId,
+            stats.view_count || 0,
+            stats.add_count || 0,
+            stats.click_count || 0,
+            stats.impression_count || 0,
+            stats.last_updated || Date.now(),
+            stats.view_count || 0,
+            stats.add_count || 0,
+            stats.click_count || 0,
+            stats.impression_count || 0,
+            stats.last_updated || Date.now()
+        ]);
+        await this.save();
+    }
+
+    getPopularityStats(repoId) {
+        const stmt = this.db.prepare('SELECT * FROM repo_popularity WHERE repo_id = :repo_id');
+        const result = stmt.getAsObject({ ':repo_id': repoId });
+        stmt.free();
+        return result && result.repo_id ? result : null;
+    }
+
+    getAllPopularityStats() {
+        const stmt = this.db.prepare('SELECT * FROM repo_popularity ORDER BY last_updated DESC');
+        const stats = [];
+        while (stmt.step()) {
+            stats.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return stats;
+    }
+
+    async incrementPopularityStat(repoId, column) {
+        const validColumns = ['view_count', 'add_count', 'click_count', 'impression_count'];
+        if (!validColumns.includes(column)) {
+            column = 'view_count';
+        }
+
+        this.db.run(`
+            INSERT INTO repo_popularity (repo_id, ${column}, last_updated)
+            VALUES (?, 1, ?)
+            ON CONFLICT(repo_id) DO UPDATE SET
+                ${column} = ${column} + 1,
+                last_updated = ?
+        `, [repoId, Date.now(), Date.now()]);
         await this.save();
     }
 

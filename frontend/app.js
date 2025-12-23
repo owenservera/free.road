@@ -430,8 +430,12 @@ async function vote(direction) {
 }
 
 // ============================================
-// AI CHAT
+// AI CHAT (2025 Upgrade - Streaming Support)
 // ============================================
+
+// Chat state for streaming
+let currentChatStream = null;
+let currentChatMessageElement = null;
 
 async function sendChatMessage() {
     const input = $('#chatInput');
@@ -442,9 +446,6 @@ async function sendChatMessage() {
     // Add user message
     addChatMessage('user', message);
     input.value = '';
-
-    // Show typing indicator
-    showTyping();
 
     // Get user-provided API key for selected provider
     const selectedProvider = state.selectedProvider || state.aiDefaults.provider;
@@ -468,40 +469,197 @@ async function sendChatMessage() {
             requestBody.userApiKey = userApiKey;
         }
 
-        const response = await fetch(`${CONFIG.API_BASE}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-
-        const data = await response.json();
-        hideTyping();
-
-        if (data.error && data.fallback) {
-            // Using fallback demo mode
-            addChatMessage('ai', data.fallback);
-            showToast(`AI API Error: ${data.error}. Using demo mode.`, 'warning');
-            state.chatHistory.push({ role: 'user', content: message });
-            state.chatHistory.push({ role: 'assistant', content: data.fallback });
-        } else if (data.error) {
-            addChatMessage('system', `Error: ${data.error}`);
-            showToast(data.error, 'error');
-        } else {
-            addChatMessage('ai', data.response);
-            state.chatHistory.push({ role: 'user', content: message });
-            state.chatHistory.push({ role: 'assistant', content: data.response });
-
-            // Show token usage if available
-            if (data.tokensUsed) {
-                const tokenInfo = `${data.tokensUsed.input + data.tokensUsed.output} tokens (${data.tokensUsed.input} in, ${data.tokensUsed.out} out)`;
-                showToast(tokenInfo, 'info');
-            }
-        }
+        // Try streaming first, fallback to non-streaming
+        await sendChatMessageStreaming(requestBody);
     } catch (error) {
         console.error('Chat error:', error);
         hideTyping();
         addChatMessage('system', 'Sorry, I encountered an error. Please try again.');
         showToast('Chat error: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Send chat message with streaming support
+ */
+async function sendChatMessageStreaming(requestBody) {
+    const { message, provider, model, context, userApiKey } = requestBody;
+
+    // Create AI message container for streaming
+    const messages = $('#chatMessages');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message ai streaming';
+    msgDiv.innerHTML = `
+        <div class="message-content">
+            <span class="streaming-indicator"></span>
+            <span class="streaming-text"></span>
+        </div>
+        <div class="chat-meta">
+            <span class="chat-model">${state.selectedModel || 'AI'}</span>
+            <button class="btn-stop-stream" onclick="stopStream()">Stop</button>
+        </div>
+    `;
+    messages.appendChild(msgDiv);
+
+    const textEl = msgDiv.querySelector('.streaming-text');
+    const stopBtn = msgDiv.querySelector('.btn-stop-stream');
+    const indicatorEl = msgDiv.querySelector('.streaming-indicator');
+
+    currentChatMessageElement = msgDiv;
+    let fullContent = '';
+
+    try {
+        // Use EventSource for SSE streaming
+        const streamUrl = new URL(`${CONFIG.API_BASE}/ai/stream`);
+        Object.keys(requestBody).forEach(key => streamUrl.searchParams.append(key, JSON.stringify(requestBody[key])));
+
+        const eventSource = new EventSource(streamUrl);
+
+        currentChatStream = {
+            eventSource,
+            stopBtn,
+            msgDiv,
+            textEl,
+            fullContent: ''
+        };
+
+        eventSource.addEventListener('connected', (e) => {
+            const data = JSON.parse(e.data);
+            console.log('Stream connected:', data.streamId);
+        });
+
+        eventSource.addEventListener('chunk', (e) => {
+            const data = JSON.parse(e.data);
+            const content = data.content;
+
+            if (content) {
+                fullContent += content;
+                textEl.textContent = fullContent;
+
+                // Scroll to bottom
+                messages.scrollTop = messages.scrollHeight;
+            }
+        });
+
+        eventSource.addEventListener('progress', (e) => {
+            // Handle progress updates if needed
+        });
+
+        eventSource.addEventListener('error', (e) => {
+            console.error('Stream error:', e);
+            eventSource.close();
+            finishStream(msgDiv, fullContent, 'error');
+        });
+
+        eventSource.addEventListener('done', (e) => {
+            const data = JSON.parse(e.data);
+            fullContent = data.content || fullContent;
+            eventSource.close();
+            finishStream(msgDiv, fullContent, 'done', data);
+        });
+
+        // Stop button handler
+        stopBtn.onclick = () => {
+            eventSource.close();
+            finishStream(msgDiv, fullContent, 'stopped');
+        };
+
+    } catch (error) {
+        // Fallback to non-streaming endpoint
+        console.log('Streaming not available, using standard endpoint');
+        await sendChatMessageStandard(requestBody);
+    }
+}
+
+/**
+ * Finish streaming and finalize the message
+ */
+function finishStream(msgDiv, content, status, metadata = {}) {
+    const textEl = msgDiv.querySelector('.streaming-text');
+    const stopBtn = msgDiv.querySelector('.btn-stop-stream');
+    const indicatorEl = msgDiv.querySelector('.streaming-indicator');
+    const metaEl = msgDiv.querySelector('.chat-meta');
+
+    if (stopBtn) stopBtn.remove();
+    if (indicatorEl) indicatorEl.remove();
+
+    msgDiv.classList.remove('streaming');
+
+    if (status === 'error') {
+        msgDiv.classList.add('error');
+        textEl.textContent = content || 'An error occurred';
+        return;
+    }
+
+    // Render markdown
+    textEl.innerHTML = renderMarkdown(content || metadata.content || '');
+
+    // Update metadata
+    if (metaEl) {
+        metaEl.innerHTML = `
+            <span class="chat-model">${metadata.model || state.selectedModel || 'AI'}</span>
+            <span class="chat-tokens">${metadata.tokens ? formatNumber(metadata.tokens.output) + ' tokens' : ''}</span>
+            <span class="chat-provider">${metadata.provider || state.selectedProvider || ''}</span>
+        `;
+    }
+
+    // Add to history
+    const lastUserMessage = state.chatHistory[state.chatHistory.length - 1];
+    if (lastUserMessage && lastUserMessage.role === 'user') {
+        state.chatHistory.push({
+            role: 'assistant',
+            content: content || metadata.content
+        });
+    }
+
+    // Show token usage if available
+    if (metadata.tokens) {
+        const tokenInfo = `${metadata.tokens.input + metadata.tokens.output} tokens (${metadata.tokens.input} in, ${metadata.tokens.output} out)`;
+        showToast(tokenInfo, 'info');
+    }
+
+    currentChatStream = null;
+    currentChatMessageElement = null;
+}
+
+/**
+ * Stop the current stream
+ */
+function stopStream() {
+    if (currentChatStream && currentChatStream.eventSource) {
+        currentChatStream.eventSource.close();
+        finishStream(
+            currentChatStream.msgDiv,
+            currentChatStream.fullContent,
+            'stopped'
+        );
+    }
+}
+
+/**
+ * Standard (non-streaming) chat fallback
+ */
+async function sendChatMessageStandard(requestBody) {
+    const { message, provider, model, context, userApiKey } = requestBody;
+
+    showTyping();
+
+    const response = await fetch(`${CONFIG.API_BASE}/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+    hideTyping();
+
+    if (data.error) {
+        addChatMessage('system', `Error: ${data.error}`);
+        showToast(data.error, 'error');
+    } else {
+        addChatMessage('ai', data.response);
+        state.chatHistory.push({ role: 'user', content: message });
+        state.chatHistory.push({ role: 'assistant', content: data.response });
     }
 }
 
@@ -1568,6 +1726,285 @@ function init() {
     $('#validatePrivacyNote')?.addEventListener('click', validatePrivacyNote);
     $('#copyPrivacyNote')?.addEventListener('click', copyPrivacyNote);
     $('#saveNoteLocally')?.addEventListener('click', saveNoteLocally);
+
+    // Suggestions listeners
+    $('#refreshSuggestions')?.addEventListener('click', loadSuggestions);
+    $('#dismissAllSuggestions')?.addEventListener('click', dismissAllSuggestions);
+
+    // Load suggestions on tab switch
+    document.querySelector('.tab-btn[data-tab="suggestions"]')?.addEventListener('click', () => {
+        loadSuggestions();
+    });
+}
+
+// ============================================
+// SUGGESTIONS MODULE
+// ============================================
+
+let currentSuggestions = [];
+let suggestionSessionId = generateSessionId();
+
+function generateSessionId() {
+    return 'sess_' + Math.random().toString(36).substr(2, 9);
+}
+
+async function loadSuggestions() {
+    const suggestionsList = $('#suggestionsList');
+    if (!suggestionsList) return;
+
+    // Show loading state
+    suggestionsList.innerHTML = `
+        <div class="suggestions-loading">
+            <div class="spinner"></div>
+            <p>Analyzing your session...</p>
+        </div>
+    `;
+
+    try {
+        // Build session context
+        const context = {
+            currentDoc: getCurrentDocumentContent(),
+            recentEdits: getRecentEdits(),
+            viewHistory: getViewHistory(),
+            activeRepos: getActiveRepos(),
+            limit: 10
+        };
+
+        // Fetch suggestions from API
+        const response = await fetch(`/api/suggestions?${new URLSearchParams({
+            currentDoc: context.currentDoc ? context.currentDoc.substring(0, 500) : '',
+            limit: context.limit
+        })}`);
+
+        if (!response.ok) throw new Error('Failed to load suggestions');
+
+        const data = await response.json();
+        currentSuggestions = data.suggestions || [];
+
+        renderSuggestions(currentSuggestions);
+
+        // Record impressions for feedback
+        for (let i = 0; i < currentSuggestions.length; i++) {
+            recordFeedback(currentSuggestions[i].repo.id, 'impressed', { position: i + 1 });
+        }
+
+    } catch (error) {
+        console.error('Error loading suggestions:', error);
+        suggestionsList.innerHTML = `
+            <div class="suggestions-empty">
+                <div class="suggestions-empty-icon">⚠️</div>
+                <p class="suggestions-empty-text">Failed to load suggestions</p>
+                <p class="suggestions-empty-hint">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function renderSuggestions(suggestions) {
+    const suggestionsList = $('#suggestionsList');
+    if (!suggestionsList) return;
+
+    if (!suggestions || suggestions.length === 0) {
+        suggestionsList.innerHTML = `
+            <div class="suggestions-empty">
+                <div class="suggestions-empty-icon">💡</div>
+                <p class="suggestions-empty-text">No suggestions right now</p>
+                <p class="suggestions-empty-hint">Start viewing documents to get personalized repository suggestions</p>
+            </div>
+        `;
+        return;
+    }
+
+    suggestionsList.innerHTML = suggestions.map(item => {
+        const repo = item.repo;
+        const score = item.score;
+        const scorePercent = Math.round(score.total * 100);
+
+        return `
+            <div class="suggestion-card" data-repo-id="${repo.id}">
+                <div class="suggestion-card-header">
+                    <h4 class="suggestion-card-title">${escapeHtml(repo.name)}</h4>
+                    <div class="suggestion-card-score">
+                        <span>${scorePercent}%</span>
+                    </div>
+                </div>
+                <p class="suggestion-card-description">${escapeHtml(repo.description || 'No description')}</p>
+                <div class="suggestion-card-meta">
+                    ${repo.language ? `
+                        <div class="suggestion-card-meta-item">
+                            <span class="suggestion-language-badge lang-${repo.language.toLowerCase()}">
+                                ${escapeHtml(repo.language)}
+                            </span>
+                        </div>
+                    ` : ''}
+                    ${repo.stars ? `
+                        <div class="suggestion-card-meta-item suggestion-popularity">
+                            <span>⭐</span>
+                            <span>${formatNumber(repo.stars)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                ${repo.tags && repo.tags.length > 0 ? `
+                    <div class="suggestion-card-tags">
+                        ${repo.tags.slice(0, 4).map(tag =>
+                            `<span class="suggestion-card-tag">${escapeHtml(tag)}</span>`
+                        ).join('')}
+                    </div>
+                ` : ''}
+                ${item.reasons && item.reasons.length > 0 ? `
+                    <div class="suggestion-card-reasons">
+                        ${item.reasons.slice(0, 2).map(reason =>
+                            `<div class="suggestion-card-reason">${escapeHtml(reason)}</div>`
+                        ).join('')}
+                    </div>
+                ` : ''}
+                <div class="suggestion-card-actions">
+                    <button class="btn btn-primary btn-add-repo" data-repo-id="${repo.id}">Add Repository</button>
+                    <button class="btn btn-secondary btn-dismiss-suggestion" data-repo-id="${repo.id}">Dismiss</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add event listeners for suggestion cards
+    attachSuggestionListeners();
+}
+
+function attachSuggestionListeners() {
+    // Add repository buttons
+    document.querySelectorAll('.btn-add-repo').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const repoId = btn.dataset.repoId;
+            await addSuggestedRepository(repoId);
+        });
+    });
+
+    // Dismiss buttons
+    document.querySelectorAll('.btn-dismiss-suggestion').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const repoId = btn.dataset.repoId;
+            dismissSuggestion(repoId);
+        });
+    });
+
+    // Card click (show details)
+    document.querySelectorAll('.suggestion-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const repoId = card.dataset.repoId;
+            showSuggestionDetails(repoId);
+        });
+    });
+}
+
+async function addSuggestedRepository(repoId) {
+    try {
+        const response = await fetch('/api/repositories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: repoId })
+        });
+
+        if (!response.ok) throw new Error('Failed to add repository');
+
+        // Record positive feedback
+        await recordFeedback(repoId, 'added');
+
+        // Show success message
+        showToast('Repository added successfully', 'success');
+
+        // Reload suggestions
+        loadSuggestions();
+
+    } catch (error) {
+        console.error('Error adding repository:', error);
+        showToast('Failed to add repository', 'error');
+    }
+}
+
+function dismissSuggestion(repoId) {
+    const card = document.querySelector(`.suggestion-card[data-repo-id="${repoId}"]`);
+    if (card) {
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(100%)';
+        setTimeout(() => card.remove(), 200);
+
+        // Record dismiss feedback
+        recordFeedback(repoId, 'dismissed');
+    }
+
+    // Update current suggestions
+    currentSuggestions = currentSuggestions.filter(s => s.repo.id !== repoId);
+}
+
+function dismissAllSuggestions() {
+    document.querySelectorAll('.suggestion-card').forEach(card => {
+        const repoId = card.dataset.repoId;
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(100%)';
+
+        recordFeedback(repoId, 'dismissed');
+    });
+
+    setTimeout(() => {
+        currentSuggestions = [];
+        renderSuggestions([]);
+    }, 200);
+}
+
+async function showSuggestionDetails(repoId) {
+    const suggestion = currentSuggestions.find(s => s.repo.id === repoId);
+    if (!suggestion) return;
+
+    // Record click feedback
+    await recordFeedback(repoId, 'clicked');
+
+    // Show details in a modal or expand the card
+    console.log('Show details for:', suggestion.repo);
+    // TODO: Implement detail view
+}
+
+async function recordFeedback(repoId, action, context = {}) {
+    try {
+        await fetch('/api/suggestions/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repoId, action, context })
+        });
+    } catch (error) {
+        console.error('Error recording feedback:', error);
+    }
+}
+
+// Context gathering helpers
+
+function getCurrentDocumentContent() {
+    const docContent = $('#docContent');
+    return docContent ? docContent.textContent : '';
+}
+
+function getRecentEdits() {
+    // TODO: Track recent edits in the session
+    return [];
+}
+
+function getViewHistory() {
+    // TODO: Track viewed documents
+    const history = sessionStorage.getItem('docViewHistory');
+    return history ? JSON.parse(history) : [];
+}
+
+function getActiveRepos() {
+    // TODO: Get currently active repositories
+    return [];
+}
+
+function formatNumber(num) {
+    if (!num) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
 }
 
 // Start application when DOM is ready

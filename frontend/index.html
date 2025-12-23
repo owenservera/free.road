@@ -147,6 +147,10 @@
                         <span class="tab-icon">🛡️</span>
                         Privacy
                     </button>
+                    <button class="tab-btn" data-tab="suggestions">
+                        <span class="tab-icon">💡</span>
+                        Suggestions
+                    </button>
                 </div>
 
                 <!-- Tab Contents -->
@@ -343,6 +347,29 @@
                                     <li>This is an optional privacy feature - nothing is mandatory</li>
                                 </ul>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Suggestions Tab -->
+                    <div id="suggestions" class="tab-pane">
+                        <div class="suggestions-header">
+                            <h3>💡 Repository Suggestions</h3>
+                            <div class="suggestions-actions">
+                                <button id="refreshSuggestions" class="btn-icon-small" title="Refresh">↻</button>
+                                <button id="suggestionsSettings" class="btn-icon-small" title="Settings">⚙️</button>
+                            </div>
+                        </div>
+                        <div class="suggestions-context">
+                            <p class="suggestions-subtitle">Based on your current document and session activity</p>
+                        </div>
+                        <div id="suggestionsList" class="suggestions-list">
+                            <div class="suggestions-loading">
+                                <div class="spinner"></div>
+                                <p>Analyzing your session...</p>
+                            </div>
+                        </div>
+                        <div class="suggestions-footer">
+                            <button id="dismissAllSuggestions" class="btn btn-secondary btn-small">Dismiss All</button>
                         </div>
                     </div>
                 </div>

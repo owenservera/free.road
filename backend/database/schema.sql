@@ -177,3 +177,61 @@ CREATE TABLE IF NOT EXISTS activity_log (
 
 CREATE INDEX idx_activity_log_entity ON activity_log(entity_type, entity_id);
 CREATE INDEX idx_activity_log_created ON activity_log(created_at);
+
+-- ============================================
+-- DOCUMENT CHUNKS (for semantic search)
+-- ============================================
+CREATE TABLE IF NOT EXISTS doc_chunks (
+    id TEXT PRIMARY KEY,
+    doc_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    metadata TEXT, -- JSON: {sections, codeBlocks, tokenCount}
+    embedding TEXT, -- JSON: vector or terms
+    hash TEXT,
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+    UNIQUE(doc_id, chunk_index)
+);
+
+CREATE INDEX idx_doc_chunks_doc ON doc_chunks(doc_id);
+
+-- ============================================
+-- DOC INDEX (document versioning)
+-- ============================================
+CREATE TABLE IF NOT EXISTS doc_index (
+    doc_id TEXT PRIMARY KEY,
+    hash TEXT NOT NULL,
+    last_indexed INTEGER NOT NULL,
+    chunk_count INTEGER DEFAULT 0,
+    metadata TEXT -- JSON
+);
+
+-- ============================================
+-- REPO SUGGESTIONS FEEDBACK (user interaction tracking)
+-- ============================================
+CREATE TABLE IF NOT EXISTS repo_suggestions_feedback (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    repo_id TEXT NOT NULL,
+    action TEXT NOT NULL, -- 'clicked', 'added', 'dismissed', 'impressed'
+    context TEXT, -- JSON: {position, ...}
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_suggestions_feedback_session ON repo_suggestions_feedback(session_id);
+CREATE INDEX idx_suggestions_feedback_repo ON repo_suggestions_feedback(repo_id);
+
+-- ============================================
+-- REPO POPULARITY (suggestion ranking)
+-- ============================================
+CREATE TABLE IF NOT EXISTS repo_popularity (
+    repo_id TEXT PRIMARY KEY,
+    view_count INTEGER DEFAULT 0,
+    add_count INTEGER DEFAULT 0,
+    click_count INTEGER DEFAULT 0,
+    impression_count INTEGER DEFAULT 0,
+    last_updated INTEGER DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE
+);

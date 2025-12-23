@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+
+/**
+ * Agent Fleet CLI
+ * Command-line interface for managing Agent Fleet cost, budgets, observability, and operations
+ */
+
+const { program } = require('commander');
+const path = require('path');
+
+// Load commands
+const costCommands = require('./commands/cost');
+const budgetCommands = require('./commands/budget');
+const observabilityCommands = require('./commands/observability');
+const fleetCommands = require('./commands/fleet');
+const optimizeCommands = require('./commands/optimize');
+
+// Configure program
+program
+  .name('agent-fleet')
+  .description('Agent Fleet Cost & Observability Management CLI')
+  .version('1.0.0');
+
+// Register command groups
+program.addCommand(costCommands);
+program.addCommand(budgetCommands);
+program.addCommand(observabilityCommands);
+program.addCommand(fleetCommands);
+program.addCommand(optimizeCommands);
+
+// Parse and execute
+program.parse();

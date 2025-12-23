@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS agent_budgets (
     id TEXT PRIMARY KEY,
     agent_id TEXT,
     pool_id TEXT,
-    limit REAL NOT NULL,
+    "limit" REAL NOT NULL,
     period TEXT NOT NULL, -- 'hourly', 'daily', 'weekly', 'monthly'
     current_spent REAL DEFAULT 0,
     alert_threshold REAL DEFAULT 0.8, -- Alert at 80%

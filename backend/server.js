@@ -10,6 +10,9 @@ const diff = require('diff');
 const fs = require('fs').promises;
 const path = require('path');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 // Multi-Repository System
 const db = require('./database');
 const GitSyncService = require('./services/git-sync');
@@ -24,6 +27,29 @@ const PrivacyService = require('./services/privacy-service');
 const AIProviderService = require('./services/ai-provider-service');
 const StreamingService = require('./services/streaming-service');
 const createAIRoutes = require('./routes/ai');
+
+// MCP Services (Model Context Protocol)
+const MCPPassport = require('./services/mcp-passport');
+const MCPClient = require('./services/mcp-client');
+const createMCPRoutes = require('./routes/mcp');
+
+// Context7 Server (Self-hosted documentation MCP server)
+const Context7Server = require('./services/context7-server');
+const createContext7Routes = require('./routes/context7');
+
+// Documentation Indexing & Suggestions
+const DocIndexer = require('./services/doc-indexer');
+const RepoSuggesterService = require('./services/repo-suggester');
+const createSuggestionRoutes = require('./routes/suggestions');
+
+// ============================================
+// AGENT FLEET SYSTEM (2025 Upgrade)
+// ============================================
+
+const APIKeyPool = require('./services/api-key-pool');
+const BudgetManager = require('./services/budget-manager');
+const AgentFleetService = require('./services/agent-fleet-service');
+const AgentScheduler = require('./services/agent-scheduler');
 
 const app = express();
 const server = http.createServer(app);
@@ -79,6 +105,9 @@ async function initializeRepositorySystem() {
         // Initialize database
         await db.initialize();
 
+        // Run migrations
+        await db.runMigrations();
+
         // Initialize services
         gitSync = new GitSyncService(db);
         repositoryService = new RepositoryService(db, gitSync);
@@ -90,6 +119,184 @@ async function initializeRepositorySystem() {
         console.log('Multi-repository system initialized');
     } catch (error) {
         console.error('Failed to initialize repository system:', error);
+    }
+}
+
+// ============================================
+// AGENT FLEET SYSTEM INITIALIZATION
+// ============================================
+
+let apiKeyPool, budgetManager, agentFleet, scheduler;
+
+async function initializeAgentFleetSystem() {
+    // Only initialize if enabled
+    if (process.env.AGENT_FLEET_ENABLED !== 'true') {
+        console.log('Agent Fleet System: disabled (set AGENT_FLEET_ENABLED=true to enable)');
+        return;
+    }
+
+    try {
+        // Initialize services
+        apiKeyPool = new APIKeyPool(db);
+        await apiKeyPool.initialize();
+
+        budgetManager = new BudgetManager(db, apiKeyPool);
+        await budgetManager.initialize();
+
+        agentFleet = new AgentFleetService(db, apiKeyPool, budgetManager);
+
+        // Initialize the task scheduler with agent fleet service
+        scheduler = new AgentScheduler(db, apiKeyPool, budgetManager, agentFleet, {
+            concurrency: parseInt(process.env.AGENT_CONCURRENT_LIMIT || '3'),
+            maxRetries: parseInt(process.env.AGENT_MAX_RETRIES || '3'),
+            pollingInterval: parseInt(process.env.AGENT_SCHEDULER_POLLING_INTERVAL || '5000')
+        });
+
+        // Get project path for dev mode detection
+        const projectPath = process.cwd();
+        await agentFleet.initialize(projectPath);
+
+        // Auto-start if configured
+        if (process.env.AGENT_FLEET_AUTO_START === 'true') {
+            await agentFleet.start();
+            await scheduler.start();
+        }
+
+        // Register agent fleet routes
+        app.get('/api/agent-fleet/status', (req, res) => {
+            res.json(agentFleet.getStatus());
+        });
+
+        app.post('/api/agent-fleet/start', async (req, res) => {
+            const { agents } = req.body;
+            const result = await agentFleet.start(agents);
+            res.json(result);
+        });
+
+        app.post('/api/agent-fleet/stop', async (req, res) => {
+            const result = await agentFleet.stop();
+            res.json(result);
+        });
+
+        app.get('/api/agents', (req, res) => {
+            const agents = db.getAllAgents();
+            res.json({ agents });
+        });
+
+        app.post('/api/agents/:id/terminate', async (req, res) => {
+            try {
+                await agentFleet.terminateAgent(req.params.id);
+                res.json({ success: true });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        app.get('/api/agents/:id/tasks', (req, res) => {
+            const tasks = db.getAgentTasks(req.params.id);
+            res.json({ tasks });
+        });
+
+        // Cost routes
+        app.get('/api/costs/summary', (req, res) => {
+            const { period = 'day' } = req.query;
+            res.json(budgetManager.getCostSummary(period));
+        });
+
+        app.get('/api/costs/by-agent', (req, res) => {
+            const { agentId, period = 'day' } = req.query;
+            res.json(budgetManager.getCostBreakdown(agentId, period));
+        });
+
+        app.get('/api/costs/timeline', (req, res) => {
+            const { agentId, days = 7 } = req.query;
+            budgetManager.getCostTimeline(agentId, days).then(timeline => {
+                res.json({ timeline });
+            });
+        });
+
+        app.get('/api/costs/anomalies', async (req, res) => {
+            const { agentId, threshold = 2.0 } = req.query;
+            const anomalies = await budgetManager.detectAnomalies(agentId, threshold);
+            res.json(anomalies);
+        });
+
+        app.get('/api/costs/optimization-suggestions', async (req, res) => {
+            const suggestions = await budgetManager.getOptimizationSuggestions();
+            res.json({ suggestions });
+        });
+
+        app.post('/api/budgets/set', async (req, res) => {
+            const { agentId, poolId, limit, period, alertThreshold } = req.body;
+            let budget;
+            if (agentId) {
+                budget = await budgetManager.setBudget(agentId, limit, period, alertThreshold);
+            } else if (poolId) {
+                budget = await budgetManager.setPoolBudget(poolId, limit, period, alertThreshold);
+            } else {
+                return res.status(400).json({ error: 'Either agentId or poolId required' });
+            }
+            res.json({ budget });
+        });
+
+        app.get('/api/budgets/status', (req, res) => {
+            const budgets = db.getAllBudgets();
+            res.json({ budgets });
+        });
+
+        // Observability routes
+        app.get('/api/observability/metrics', (req, res) => {
+            const { agentId } = req.query;
+            const metrics = db.getObservabilityMetrics(agentId);
+            res.json({ metrics });
+        });
+
+        app.get('/api/observability/logs', (req, res) => {
+            const { agentId, level, limit = 100 } = req.query;
+            const logs = db.getObservabilityLogs(agentId, level, limit);
+            res.json({ logs });
+        });
+
+        app.get('/api/observability/alerts', (req, res) => {
+            const alerts = db.getObservabilityAlerts(false);
+            res.json({ alerts });
+        });
+
+        app.post('/api/observability/alerts/:id/acknowledge', async (req, res) => {
+            await db.acknowledgeAlert(req.params.id);
+            res.json({ success: true });
+        });
+
+        app.get('/api/observability/health', async (req, res) => {
+            const fleetStatus = agentFleet.getStatus();
+            const health = {
+                healthy: fleetStatus.isRunning,
+                agents: fleetStatus.agents.map(a => ({
+                    id: a.id,
+                    type: a.agentType,
+                    status: a.status,
+                    uptime: Date.now() - a.spawnedAt
+                }))
+            };
+            res.json(health);
+        });
+
+        // Task queue routes
+        app.post('/api/tasks/queue', async (req, res) => {
+            const { agentType, taskType, taskData, priority } = req.body;
+            const taskId = await agentFleet.queueTask(agentType, taskType, taskData, priority);
+            res.json({ taskId });
+        });
+
+        app.get('/api/tasks/pending', (req, res) => {
+            const { limit = 50 } = req.query;
+            const tasks = db.getPendingTasks(limit);
+            res.json({ tasks });
+        });
+
+        console.log('Agent Fleet System initialized');
+    } catch (error) {
+        console.error('Failed to initialize Agent Fleet System:', error);
     }
 }
 
@@ -430,6 +637,54 @@ const streamingService = new StreamingService();
 
 // Register AI routes
 app.use('/api/ai', createAIRoutes(aiProviderService, streamingService, keyManager));
+
+// Initialize MCP Services
+const mcpPassport = new MCPPassport();
+const mcpClient = new MCPClient(mcpPassport);
+
+// Register MCP routes
+app.use('/api/mcp', createMCPRoutes(mcpPassport, mcpClient));
+
+// Initialize Context7 Server (documentation MCP server)
+let context7Server = null;
+const CONTEXT7_PORT = process.env.CONTEXT7_PORT || 31338;
+
+async function initializeContext7() {
+    try {
+        context7Server = new Context7Server(DOCS_PATH, db);
+        await context7Server.initialize(CONTEXT7_PORT);
+        console.log(`Context7 MCP Server initialized on port ${CONTEXT7_PORT}`);
+    } catch (error) {
+        console.error('Failed to initialize Context7 server:', error.message);
+    }
+}
+
+// Register Context7 routes
+app.use('/api/context7', createContext7Routes(() => context7Server));
+
+// Initialize Documentation Indexer
+const docIndexer = new DocIndexer(db);
+docIndexer.initialize().then(() => {
+    console.log('Documentation Indexer initialized');
+}).catch(err => {
+    console.error('Failed to initialize Doc Indexer:', err.message);
+});
+
+// Initialize Repository Suggester
+const repoSuggester = new RepoSuggesterService(db, docIndexer);
+repoSuggester.initialize().then(() => {
+    console.log('Repository Suggester initialized');
+}).catch(err => {
+    console.error('Failed to initialize Repo Suggester:', err.message);
+});
+
+// Register Suggestions routes
+app.use('/api/suggestions', createSuggestionRoutes(repoSuggester));
+
+// Cleanup expired sessions every hour
+setInterval(() => {
+    mcpPassport.cleanup();
+}, 60 * 60 * 1000);
 
 // Default model configuration
 const DEFAULT_MODEL = process.env.AI_MODEL || 'claude-3-5-sonnet-20241022';
@@ -1239,6 +1494,12 @@ wss.on('connection', (ws) => {
 async function start() {
     // Initialize multi-repository system
     await initializeRepositorySystem();
+
+    // Initialize Context7 documentation MCP server
+    await initializeContext7();
+
+    // Initialize agent fleet system
+    await initializeAgentFleetSystem();
 
     // Load documents on startup
     await loadDocuments();
