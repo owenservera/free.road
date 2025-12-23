@@ -1,0 +1,27 @@
+{
+  "id": "documentation",
+  "name": "Documentation Module",
+  "version": "1.0.0",
+  "description": "Documentation indexing and Context7 MCP server",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["documentation", "indexing", "mcp"],
+  "engine": "content",
+  "type": "core",
+  "dependencies": ["infrastructure"],
+  "main": "./index.js",
+  "services": [
+    { "name": "doc-indexer", "path": "./services/doc-indexer.js" },
+    { "name": "context7-server", "path": "./services/context7-server.js" }
+  ],
+  "routes": [
+    { "path": "/api/context7", "method": "GET", "handler": "status" },
+    { "path": "/api/context7", "method": "POST", "handler": "search" },
+    { "path": "/api/context7", "method": "POST", "handler": "reindex" },
+    { "path": "/api/context7", "method": "GET", "handler": "docs" }
+  ],
+  "config": {
+    "chunkSize": 500,
+    "overlap": 50
+  }
+}

@@ -1,11 +1,12 @@
 {
   "output": "repomix-output.xml",
   "include": [
+    "engines/**/*.{js,json}",
+    "shared/**/*",
     "frontend/**/*.{js,html,css,md}",
     "backend/**/*.{js,json}",
     "contracts/**/*.{sol,json,js}",
     "docs/**/*.md",
-    "shared/**/*",
     "package.json",
     "README.md",
     ".env.example",

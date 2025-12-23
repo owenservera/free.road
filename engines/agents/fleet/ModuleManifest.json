@@ -1,0 +1,31 @@
+{
+  "id": "fleet",
+  "name": "Agent Fleet Module",
+  "version": "1.0.0",
+  "description": "AI agent fleet orchestration and scheduling",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["agents", "fleet", "scheduling", "ai"],
+  "engine": "agents",
+  "type": "core",
+  "dependencies": ["infrastructure"],
+  "main": "./index.js",
+  "services": [
+    { "name": "agent-fleet", "path": "./services/agent-fleet.js" },
+    { "name": "scheduler", "path": "./services/scheduler.js" },
+    { "name": "budget", "path": "./services/budget.js" },
+    { "name": "key-pool", "path": "./services/key-pool.js" }
+  ],
+  "routes": [
+    { "path": "/api/agents", "method": "GET", "handler": "list" },
+    { "path": "/api/agent-fleet", "method": "POST", "handler": "start" },
+    { "path": "/api/agent-fleet", "method": "POST", "handler": "stop" },
+    { "path": "/api/ai", "method": "GET", "handler": "chat" },
+    { "path": "/api/ai", "method": "POST", "handler": "chat" }
+  ],
+  "config": {
+    "concurrency": 3,
+    "maxRetries": 3,
+    "pollingInterval": 5000
+  }
+}

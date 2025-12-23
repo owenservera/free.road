@@ -1,0 +1,25 @@
+{
+  "id": "privacy",
+  "name": "Privacy Module",
+  "version": "1.0.0",
+  "description": "Tornado Cash privacy layer",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["privacy", "tornado", "governance"],
+  "engine": "governance",
+  "type": "core",
+  "dependencies": ["infrastructure"],
+  "main": "./index.js",
+  "services": [
+    { "name": "privacy-service", "path": "./services/privacy-service.js" }
+  ],
+  "config": {
+    "rpcUrl": "https://eth-mainnet.gateway.tenderly.co",
+    "privacyRouterAddress": "",
+    "tornadoInstances": {
+      "ETH_0_1": "0x...",
+      "ETH_1_0": "0x...",
+      "ETH_10": "0x..."
+    }
+  }
+}

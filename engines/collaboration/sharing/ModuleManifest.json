@@ -1,0 +1,24 @@
+{
+  "id": "commands",
+  "name": "Commands Module",
+  "version": "1.0.0",
+  "description": "Custom command management system",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["commands", "custom", "registry"],
+  "engine": "collaboration",
+  "type": "core",
+  "dependencies": ["infrastructure"],
+  "main": "./index.js",
+  "services": [
+    { "name": "commands", "path": "./services/commands.js" }
+  ],
+  "routes": [
+    { "path": "/api/commands", "method": "GET", "handler": "list" },
+    { "path": "/api/commands", "method": "POST", "handler": "create" },
+    { "path": "/api/commands/:name", "method": "GET", "handler": "get" }
+  ]
+}
+d": "DELETE", "handler": "delete" }
+  ]
+}

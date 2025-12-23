@@ -204,3 +204,11 @@ Each branch type has automated tests:
 - `test/**` → Integration tests
 
 See `.github/workflows/` for details.
+
+---
+
+## Visualization System
+
+**Plan:** [docs/VISUALIZATION-IMPLEMENTATION-PLAN.md](docs/VISUALIZATION-IMPLEMENTATION-PLAN.md)  
+**Status:** Pending Opus 4.5 approval  
+**Scope:** 3-stack architecture (Core App / Docs / Live Ops)

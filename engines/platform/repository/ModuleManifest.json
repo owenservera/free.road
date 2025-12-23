@@ -1,0 +1,34 @@
+{
+  "id": "repository",
+  "name": "Repository Module",
+  "version": "1.0.0",
+  "description": "Repository management and Git synchronization",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["repository", "git", "sync"],
+  "engine": "platform",
+  "type": "core",
+  "dependencies": ["infrastructure"],
+  "main": "./index.js",
+  "services": [
+    { "name": "repository", "path": "./services/repository.js" },
+    { "name": "git-sync", "path": "./services/git-sync.js" }
+  ],
+  "routes": [
+    { "path": "/api/repositories", "method": "GET", "handler": "list" },
+    { "path": "/api/repositories", "method": "POST", "handler": "create" },
+    { "path": "/api/repositories/:id", "method": "GET", "handler": "get" },
+    { "path": "/api/repositories/:id", "method": "DELETE", "handler": "delete" },
+    { "path": "/api/collections", "method": "GET", "handler": "list" },
+    { "path": "/api/collections", "method": "POST", "handler": "create" },
+    { "path": "/api/collections/:id", "method": "GET", "handler": "get" },
+    { "path": "/api/collections/:id", "method": "PUT", "handler": "update" },
+    { "path": "/api/collections/:id", "method": "DELETE", "handler": "delete" }
+  ],
+  "config": {
+    "git": {
+      "depth": 1,
+      "singleBranch": true
+    }
+  }
+}

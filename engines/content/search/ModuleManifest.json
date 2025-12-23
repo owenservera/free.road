@@ -1,0 +1,25 @@
+{
+  "id": "search",
+  "name": "Search Module",
+  "version": "1.0.0",
+  "description": "Repository suggestions and search",
+  "author": "Finallica Team",
+  "license": "MIT",
+  "keywords": ["search", "suggestions", "recommendations"],
+  "engine": "content",
+  "type": "core",
+  "dependencies": ["infrastructure"],
+  "main": "./index.js",
+  "services": [
+    { "name": "repo-suggester", "path": "./services/repo-suggester.js" }
+  ],
+  "routes": [
+    { "path": "/api/suggestions", "method": "GET", "handler": "list" },
+    { "path": "/api/suggestions", "method": "POST", "handler": "feedback" },
+    { "path": "/api/suggestions", "method": "GET", "handler": "popular" }
+  ],
+  "config": {
+    "cacheExpiry": 86400000,
+    "defaultLimit": 10
+  }
+}
