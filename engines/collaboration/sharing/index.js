@@ -1,4 +1,4 @@
-const { Module } = require('../../../Module');
+const { Module } = require('../../Module');
 const ShareService = require('./services/share');
 const CommandRegistry = require('./services/commands');
 const createShareRoutes = require('./routes/share');

@@ -1,4 +1,4 @@
-const { Module } = require('../../../Module');
+const { Module } = require('../../Module');
 const DocIndexerService = require('./services/doc-indexer');
 const Context7Server = require('./services/context7-server');
 const MCPClient = require('./services/mcp-client');

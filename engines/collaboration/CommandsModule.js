@@ -1,4 +1,4 @@
-const { Module } = require('../../../Module');
+const { Module } = require('../Module');
 
 class CommandsModule extends Module {
     constructor(options = {}) {

@@ -1,4 +1,4 @@
-const { Module } = require('../../../Module');
+const { Module } = require('../../Module');
 const AgentFleetService = require('./services/agent-fleet');
 const AgentScheduler = require('./services/scheduler');
 const BudgetManager = require('./services/budget');

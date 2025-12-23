@@ -1,4 +1,4 @@
-const { Module } = require('../../../Module');
+const { Module } = require('../../Module');
 const PrivacyService = require('./services/privacy');
 
 class PrivacyModule extends Module {

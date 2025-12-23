@@ -1,4 +1,4 @@
-const { Module } = require('../../../Module');
+const { Module } = require('../../Module');
 const RepoSuggesterService = require('./services/repo-suggester');
 const createSuggestionRoutes = require('./routes/suggestions');
 
