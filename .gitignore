@@ -15,8 +15,9 @@ coverage/
 .env.*.local
 
 # Repomix outputs
-repomix-output.txt
-repomix-code.txt
+repomix-output.xml
+repomix-code.xml
+repomix-*.xml
 repomix-*.txt
 .repomix.cache/
 

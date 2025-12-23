@@ -1,18 +1,23 @@
 {
-  "output": "repomix-code.txt",
+  "output": "repomix-code.xml",
   "include": [
     "frontend/**/*.{js,html,css}",
     "backend/**/*.{js,json}",
     "contracts/**/*.{sol,json,js}",
     "shared/**/*",
     "package.json",
-    ".env.example"
+    ".env.example",
+    ".gitignore",
+    ".repomix.*"
   ],
   "ignore": [
     "node_modules/**",
     "**/node_modules/**",
     ".git/**",
-    "*.lock",
+    "**/.git/**",
+    "docs/finallica/.git/**",
+    "**/*.db",
+    "**/*.lock",
     "dist/**",
     "build/**",
     "artifacts/**",
@@ -20,14 +25,15 @@
     "coverage/**",
     ".DS_Store",
     "*.log",
+    ".claude/**",
+    "repomix*.xml",
+    "repomix*.txt",
     "**/*.md"
   ],
   "style": {
-    "startToken": "=== FILE_START: {{filePath}} ===",
-    "endToken": "=== FILE_END: {{filePath}} ===",
     "directoryStructure": true,
-    "topFilesLength": 50,
     "removeComments": false,
-    "removeEmptyLines": false
+    "removeEmptyLines": false,
+    "showLineNumbers": false
   }
 }

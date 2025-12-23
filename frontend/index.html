@@ -17,6 +17,13 @@
                     <span class="logo-subtitle">Documentation System</span>
                 </h1>
                 <div class="header-actions">
+                    <!-- Privacy Toggle -->
+                    <div id="privacyToggleContainer" class="hidden">
+                        <button id="privacyToggle" class="btn-privacy">
+                            <span class="privacy-icon">🛡️</span>
+                            <span class="privacy-label">Privacy Mode</span>
+                        </button>
+                    </div>
                     <button id="connectWallet" class="btn btn-primary">
                         <span class="btn-icon">⚡</span>
                         Connect Wallet
@@ -136,6 +143,10 @@
                         <span class="tab-icon">▣</span>
                         Activity
                     </button>
+                    <button class="tab-btn" data-tab="privacy">
+                        <span class="tab-icon">🛡️</span>
+                        Privacy
+                    </button>
                 </div>
 
                 <!-- Tab Contents -->
@@ -199,6 +210,134 @@
                     <div id="activity" class="tab-pane">
                         <div id="activityFeed" class="activity-feed">
                             <!-- Activity timeline -->
+                        </div>
+                    </div>
+
+                    <!-- Privacy Tab -->
+                    <div id="privacy" class="tab-pane">
+                        <!-- Privacy Status -->
+                        <div class="privacy-status-bar">
+                            <div class="privacy-status">
+                                <span class="privacy-status-dot"></span>
+                                <span id="privacyStatusText">Privacy Service: Checking...</span>
+                            </div>
+                        </div>
+
+                        <!-- Privacy Controls Panel -->
+                        <div id="privacyControls" class="privacy-panel hidden">
+                            <h3>🛡️ Privacy Controls</h3>
+
+                            <!-- Private Deposit Section -->
+                            <div class="privacy-section">
+                                <h4>Private Deposit</h4>
+                                <p class="privacy-warning">
+                                    Deposit funds into the privacy mixer. Your deposit will be mixed with others
+                                    to break the on-chain link between sender and recipient.
+                                </p>
+
+                                <div class="form-group">
+                                    <label>Token</label>
+                                    <select id="privacyToken">
+                                        <option value="ETH">ETH</option>
+                                        <option value="BLF">BLF</option>
+                                        <option value="USDC">USDC</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Amount</label>
+                                    <select id="privacyAmount">
+                                        <option value="0.1">0.1 ETH</option>
+                                        <option value="1">1 ETH</option>
+                                        <option value="10">10 ETH</option>
+                                        <option value="100">100 BLF</option>
+                                        <option value="1000">1000 BLF</option>
+                                        <option value="10000">10000 BLF</option>
+                                    </select>
+                                </div>
+
+                                <div class="privacy-actions">
+                                    <button id="generatePrivacyNote" class="btn btn-secondary">
+                                        <span class="btn-icon">🔐</span>
+                                        Generate Note
+                                    </button>
+                                </div>
+
+                                <div class="form-group" style="margin-top: 1rem;">
+                                    <label>Your Note (save this securely!)</label>
+                                    <textarea id="privacyNoteDisplay" readonly rows="3" placeholder="Click 'Generate Note' to create a privacy deposit note..."></textarea>
+                                    <div id="privacyFeeEstimate" style="margin-top: 0.5rem;"></div>
+                                </div>
+
+                                <div class="privacy-actions">
+                                    <button id="executePrivateDeposit" class="btn btn-primary">
+                                        <span class="btn-icon">💰</span>
+                                        Deposit to Privacy Pool
+                                    </button>
+                                    <button id="copyPrivacyNote" class="btn btn-secondary">
+                                        <span class="btn-icon">📋</span>
+                                        Copy Note
+                                    </button>
+                                    <button id="saveNoteLocally" class="btn btn-secondary">
+                                        <span class="btn-icon">💾</span>
+                                        Save Note
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="privacy-divider"></div>
+
+                            <!-- Note Validation Section -->
+                            <div class="privacy-section">
+                                <h4>Validate Note</h4>
+                                <p class="privacy-warning">
+                                    Validate an existing privacy note to check if it's valid and view its details.
+                                </p>
+
+                                <div class="form-group">
+                                    <label>Paste your note here</label>
+                                    <input type="text" id="validateNoteInput" placeholder="tornado-ETH-0.1-..." />
+                                </div>
+
+                                <div id="noteValidationResult" style="display: none;"></div>
+
+                                <div class="privacy-actions">
+                                    <button id="validatePrivacyNote" class="btn btn-secondary">Validate Note</button>
+                                </div>
+                            </div>
+
+                            <div class="privacy-divider"></div>
+
+                            <!-- Saved Notes Section -->
+                            <div class="privacy-section">
+                                <h4>Saved Notes</h4>
+                                <div id="savedNotesList" style="margin-top: 0.5rem;">
+                                    <p class="text-muted">No saved notes</p>
+                                </div>
+                            </div>
+
+                            <!-- Privacy Best Practices -->
+                            <div class="privacy-info">
+                                <h5>Privacy Best Practices:</h5>
+                                <ul>
+                                    <li>Wait at least a few hours between deposit and withdrawal</li>
+                                    <li>Use a fresh address for withdrawals</li>
+                                    <li>Don't deposit and withdraw predictable amounts</li>
+                                    <li>Save your note securely - it's required to withdraw</li>
+                                    <li>Never share your note with anyone</li>
+                                </ul>
+                            </div>
+
+                            <!-- Privacy Disclaimer -->
+                            <div class="privacy-disclaimer">
+                                <strong>Privacy Disclaimer:</strong>
+                                <ul>
+                                    <li>Tornado Cash sanctions were lifted in March 2025, but regulations vary by jurisdiction</li>
+                                    <li>Some exchanges may flag addresses that interact with mixers</li>
+                                    <li>You are responsible for compliance with your local laws</li>
+                                    <li>This is an optional privacy feature - nothing is mandatory</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>

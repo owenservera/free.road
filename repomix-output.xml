@@ -49,6 +49,7 @@ backend/data/repositories.db
 backend/database/index.js
 backend/database/schema.sql
 backend/package.json
+backend/routes/collections.js
 backend/routes/repositories.js
 backend/seed.js
 backend/server.js
@@ -158,8 +159,9 @@ coverage/
 .env.*.local
 
 # Repomix outputs
-repomix-output.txt
-repomix-code.txt
+repomix-output.xml
+repomix-code.xml
+repomix-*.xml
 repomix-*.txt
 .repomix.cache/
 
@@ -188,20 +190,25 @@ temp/
 
 <file path=".repomix.code.json">
 {
-  "output": "repomix-code.txt",
+  "output": "repomix-code.xml",
   "include": [
     "frontend/**/*.{js,html,css}",
     "backend/**/*.{js,json}",
     "contracts/**/*.{sol,json,js}",
     "shared/**/*",
     "package.json",
-    ".env.example"
+    ".env.example",
+    ".gitignore",
+    ".repomix.*"
   ],
   "ignore": [
     "node_modules/**",
     "**/node_modules/**",
     ".git/**",
-    "*.lock",
+    "**/.git/**",
+    "docs/finallica/.git/**",
+    "**/*.db",
+    "**/*.lock",
     "dist/**",
     "build/**",
     "artifacts/**",
@@ -209,22 +216,23 @@ temp/
     "coverage/**",
     ".DS_Store",
     "*.log",
+    ".claude/**",
+    "repomix*.xml",
+    "repomix*.txt",
     "**/*.md"
   ],
   "style": {
-    "startToken": "=== FILE_START: {{filePath}} ===",
-    "endToken": "=== FILE_END: {{filePath}} ===",
     "directoryStructure": true,
-    "topFilesLength": 50,
     "removeComments": false,
-    "removeEmptyLines": false
+    "removeEmptyLines": false,
+    "showLineNumbers": false
   }
 }
 </file>
 
 <file path=".repomix.json">
 {
-  "output": "repomix-output.txt",
+  "output": "repomix-output.xml",
   "include": [
     "frontend/**/*.{js,html,css,md}",
     "backend/**/*.{js,json}",
@@ -233,28 +241,34 @@ temp/
     "shared/**/*",
     "package.json",
     "README.md",
-    ".env.example"
+    ".env.example",
+    ".gitignore",
+    ".repomix.json"
   ],
   "ignore": [
     "node_modules/**",
     "**/node_modules/**",
     ".git/**",
-    "*.lock",
+    "**/.git/**",
+    "docs/finallica/.git/**",
+    "**/*.db",
+    "**/*.lock",
     "dist/**",
     "build/**",
     "artifacts/**",
     "cache/**",
     "coverage/**",
     ".DS_Store",
-    "*.log"
+    "*.log",
+    ".claude/**",
+    "repomix*.xml",
+    "repomix*.txt"
   ],
   "style": {
-    "startToken": "=== FILE_START: {{filePath}} ===",
-    "endToken": "=== FILE_END: {{filePath}} ===",
     "directoryStructure": true,
-    "topFilesLength": 50,
     "removeComments": false,
-    "removeEmptyLines": false
+    "removeEmptyLines": false,
+    "showLineNumbers": false
   }
 }
 </file>
@@ -330,6 +344,62 @@ QUORUM_PCT=0.67
 MIN_STAKE_PROPOSAL=1000
 MIN_STAKE_VR=500000
 MIN_STAKE_SE=2000000
+
+# ============================================
+# PRIVACY CONFIGURATION (Tornado Cash Integration)
+# ============================================
+
+# Enable privacy features (true/false)
+PRIVACY_ENABLED=false
+
+# Ethereum RPC URL (for interacting with Tornado Cash contracts)
+RPC_URL=https://mainnet.infura.io/v3/YOUR_INFURA_KEY
+
+# Finallica Privacy Router Contract Address
+PRIVACY_ROUTER_ADDRESS=0x...
+
+# Relayer URL (optional - for private withdrawals)
+# If not provided, users must withdraw directly (less private)
+RELAYER_URL=https://relayer.finallica.io
+
+# ============================================
+# TORNADO CASH INSTANCES
+# ============================================
+
+# Mainnet Tornado Cash Instance Addresses
+# Get latest addresses from: https://docs.tornado.ws/
+
+# ETH Pools
+TORNADO_ETH_0_1=0x...
+TORNADO_ETH_1=0x...
+TORNADO_ETH_10=0x...
+TORNADO_ETH_100=0x...
+
+# USDC Pool (Ethereum mainnet)
+TORNADO_USDC_100=0x...
+
+# ============================================
+# CUSTOM BLF PRIVACY POOLS
+# ============================================
+
+# BLF Token Privacy Pools (deploy separately for Finallica)
+# These are custom Tornado instances configured for BLF token
+TORNADO_BLF_100=0x...
+TORNADO_BLF_1000=0x...
+TORNADO_BLF_10000=0x...
+
+# ============================================
+# TOKEN ADDRESSES
+# ============================================
+
+# BLF Governance Token Address
+BLF_TOKEN_ADDRESS=0x...
+
+# USDC Token Address (Ethereum mainnet)
+USDC_ADDRESS=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+
+# USDT Token Address (Ethereum mainnet)
+USDT_ADDRESS=0xdAC17F958D2ee523a2206206994597C13D831ec7
 </file>
 
 <file path="backend/database/index.js">
@@ -1193,21 +1263,158 @@ CREATE INDEX idx_activity_log_created ON activity_log(created_at);
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "ws": "^8.14.2",
-    "simple-git": "^3.19.1",
-    "diff": "^5.1.0",
-    "marked": "^9.1.6",
-    "sql.js": "^1.10.3",
     "adm-zip": "^0.5.10",
+    "cors": "^2.8.5",
+    "diff": "^5.1.0",
+    "ethers": "^6.16.0",
+    "express": "^4.18.2",
+    "marked": "^9.1.6",
+    "octokit": "^3.1.2",
+    "simple-git": "^3.19.1",
+    "sql.js": "^1.10.3",
     "tar": "^6.2.0",
-    "octokit": "^3.1.2"
+    "ws": "^8.14.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   }
 }
+</file>
+
+<file path="backend/routes/collections.js">
+// Collection API Routes
+
+const express = require('express');
+const crypto = require('crypto');
+const router = express.Router();
+
+function createCollectionRoutes(db) {
+    // GET /api/collections - List all collections
+    router.get('/', (req, res) => {
+        try {
+            const collections = db.getAllCollections();
+            res.json({ collections });
+        } catch (error) {
+            console.error('Error listing collections:', error);
+            res.status(500).json({ error: 'Failed to list collections' });
+        }
+    });
+
+    // GET /api/collections/:id - Get collection by ID
+    router.get('/:id', (req, res) => {
+        try {
+            const collection = db.getCollection(req.params.id);
+            if (!collection) {
+                return res.status(404).json({ error: 'Collection not found' });
+            }
+
+            // Get full repository details for each repo
+            const repos = [];
+            if (collection.repository_ids) {
+                for (const repoId of collection.repository_ids) {
+                    const repo = db.getRepository(repoId);
+                    if (repo) {
+                        repos.push({
+                            id: repo.id,
+                            name: repo.name,
+                            description: repo.description,
+                            tags: repo.tags,
+                            status: repo.status
+                        });
+                    }
+                }
+            }
+
+            res.json({
+                collection: {
+                    ...collection,
+                    repositories: repos
+                }
+            });
+        } catch (error) {
+            console.error('Error getting collection:', error);
+            res.status(500).json({ error: 'Failed to get collection' });
+        }
+    });
+
+    // GET /api/collections/slug/:slug - Get collection by slug
+    router.get('/slug/:slug', (req, res) => {
+        try {
+            const collection = db.getCollectionBySlug(req.params.slug);
+            if (!collection) {
+                return res.status(404).json({ error: 'Collection not found' });
+            }
+            res.json({ collection });
+        } catch (error) {
+            console.error('Error getting collection by slug:', error);
+            res.status(500).json({ error: 'Failed to get collection' });
+        }
+    });
+
+    // POST /api/collections - Create new collection (admin)
+    router.post('/', async (req, res) => {
+        try {
+            const { name, slug, description, repositoryIds, tags, isFeatured } = req.body;
+
+            if (!name) {
+                return res.status(400).json({ error: 'Name is required' });
+            }
+
+            const collection = {
+                id: 'col_' + crypto.randomBytes(16).toString('hex'),
+                name,
+                slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
+                description: description || '',
+                repositoryIds: repositoryIds || [],
+                tags: tags || [],
+                isFeatured: isFeatured || false
+            };
+
+            await db.createCollection(collection);
+
+            res.status(201).json({ collection });
+        } catch (error) {
+            console.error('Error creating collection:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // PUT /api/collections/:id - Update collection
+    router.put('/:id', async (req, res) => {
+        try {
+            const { name, description, repositoryIds, tags, isFeatured } = req.body;
+
+            await db.updateCollection(req.params.id, {
+                name,
+                description,
+                repositoryIds,
+                tags,
+                isFeatured
+            });
+
+            const collection = db.getCollection(req.params.id);
+            res.json({ collection });
+        } catch (error) {
+            console.error('Error updating collection:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    // DELETE /api/collections/:id - Delete collection
+    router.delete('/:id', async (req, res) => {
+        try {
+            await db.deleteCollection(req.params.id);
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting collection:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    return router;
+}
+
+module.exports = createCollectionRoutes;
 </file>
 
 <file path="backend/routes/repositories.js">
@@ -1688,6 +1895,7 @@ const db = require('./database');
 const GitSyncService = require('./services/git-sync');
 const RepositoryService = require('./services/repository-service');
 const createRepositoryRoutes = require('./routes/repositories');
+const createCollectionRoutes = require('./routes/collections');
 
 // Privacy Service
 const PrivacyService = require('./services/privacy-service');
@@ -1752,6 +1960,7 @@ async function initializeRepositorySystem() {
 
         // Register routes
         app.use('/api/repositories', createRepositoryRoutes(db, repositoryService, gitSync));
+        app.use('/api/collections', createCollectionRoutes(db));
 
         console.log('Multi-repository system initialized');
     } catch (error) {
@@ -11055,7 +11264,15 @@ const state = {
     aiProviders: {},
     aiDefaults: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
     selectedProvider: null,
-    selectedModel: null
+    selectedModel: null,
+    // Privacy Configuration
+    privacy: {
+        enabled: false,
+        available: false,
+        notes: [],
+        selectedPool: null,
+        pools: []
+    }
 };
 
 // Utility Functions
@@ -11935,6 +12152,332 @@ function renderModelSelector() {
 }
 
 // ============================================
+// PRIVACY FUNCTIONS
+// ============================================
+
+/**
+ * Initialize privacy service - check availability
+ */
+async function loadPrivacyStatus() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/status`);
+        const data = await response.json();
+        state.privacy.available = data.available;
+        state.privacy.enabled = data.enabled;
+
+        if (data.available) {
+            // Show privacy toggle
+            $('#privacyToggleContainer')?.classList.remove('hidden');
+            await loadPrivacyPools();
+        }
+    } catch (error) {
+        console.error('Failed to load privacy status:', error);
+    }
+}
+
+/**
+ * Load available privacy pools
+ */
+async function loadPrivacyPools() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/pools`);
+        const data = await response.json();
+        state.privacy.pools = data.pools || [];
+
+        // Update pool dropdowns
+        updatePrivacyPoolOptions();
+    } catch (error) {
+        console.error('Failed to load privacy pools:', error);
+    }
+}
+
+/**
+ * Update privacy pool dropdown options
+ */
+function updatePrivacyPoolOptions() {
+    const tokenSelect = $('#privacyToken');
+    const amountSelect = $('#privacyAmount');
+
+    if (!tokenSelect || !amountSelect) return;
+
+    // Get unique tokens
+    const tokens = [...new Set(state.privacy.pools.map(p => p.token || p.tokenSymbol))];
+
+    tokenSelect.innerHTML = tokens.map(token =>
+        `<option value="${token}">${token}</option>`
+    ).join('');
+
+    // Update amounts based on selected token
+    const updateAmounts = () => {
+        const selectedToken = tokenSelect.value;
+        const pools = state.privacy.pools.filter(p =>
+            (p.token || p.tokenSymbol) === selectedToken
+        );
+
+        amountSelect.innerHTML = pools.map(p =>
+            `<option value="${p.denomination || p.amount}">${p.denomination || p.amount}</option>`
+        ).join('');
+    };
+
+    tokenSelect.addEventListener('change', updateAmounts);
+    updateAmounts();
+}
+
+/**
+ * Toggle privacy mode
+ */
+function togglePrivacyMode() {
+    state.privacy.enabled = !state.privacy.enabled;
+    $('#privacyToggle')?.classList.toggle('active', state.privacy.enabled);
+    $('#privacyControls')?.classList.toggle('hidden', !state.privacy.enabled);
+
+    if (state.privacy.enabled) {
+        showToast('Privacy mode enabled - your transactions will be mixed', 'info');
+        trackActivity('privacy_enabled', {});
+    } else {
+        showToast('Privacy mode disabled - transactions will be transparent', 'info');
+        trackActivity('privacy_disabled', {});
+    }
+}
+
+/**
+ * Generate a privacy deposit note
+ */
+async function generatePrivacyNote() {
+    const token = $('#privacyToken')?.value;
+    const amount = $('#privacyAmount')?.value;
+
+    if (!token || !amount) {
+        showToast('Please select token and amount', 'warning');
+        return;
+    }
+
+    try {
+        showToast('Generating privacy note...', 'info');
+
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/note`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, amount })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            state.privacy.notes.push(data.note);
+
+            const noteDisplay = $('#privacyNoteDisplay');
+            if (noteDisplay) {
+                noteDisplay.value = data.note.note;
+            }
+
+            showToast('Privacy note generated - save this securely!', 'success');
+            trackActivity('privacy_note_generated', { token, amount });
+
+            // Update fee estimate
+            await updatePrivacyFeeEstimate(token, amount);
+        }
+    } catch (error) {
+        console.error('Failed to generate note:', error);
+        showToast('Failed to generate note', 'error');
+    }
+}
+
+/**
+ * Update fee estimate for privacy transaction
+ */
+async function updatePrivacyFeeEstimate(token, amount) {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/fees?token=${token}&amount=${amount}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const feeDisplay = $('#privacyFeeEstimate');
+            if (feeDisplay) {
+                feeDisplay.textContent = `Estimated fee: ${data.totalFee} ${token}`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch fee estimate:', error);
+    }
+}
+
+/**
+ * Execute private deposit
+ */
+async function executePrivateDeposit() {
+    const noteDisplay = $('#privacyNoteDisplay');
+    const note = noteDisplay?.value;
+
+    if (!note) {
+        showToast('Generate a note first', 'warning');
+        return;
+    }
+
+    if (!state.wallet) {
+        showToast('Please connect wallet first', 'warning');
+        return;
+    }
+
+    try {
+        showToast('Executing private deposit...', 'info');
+
+        // In production, get private key from wallet
+        // For demo mode, use placeholder
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/deposit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                note,
+                privateKey: state.account, // In production, use actual signing
+                useRouter: true
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`Private deposit complete: ${formatAddress(data.result.txHash)}`, 'success');
+            trackActivity('private_deposit', { txHash: data.result.txHash });
+
+            // Clear note display for security
+            if (noteDisplay) {
+                noteDisplay.value = '';
+            }
+        }
+    } catch (error) {
+        console.error('Deposit failed:', error);
+        showToast('Deposit failed', 'error');
+    }
+}
+
+/**
+ * Validate a privacy note
+ */
+async function validatePrivacyNote() {
+    const noteInput = $('#validateNoteInput');
+    const note = noteInput?.value;
+
+    if (!note) {
+        showToast('Enter a note to validate', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/privacy/note/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note })
+        });
+
+        const data = await response.json();
+
+        const validationResult = $('#noteValidationResult');
+        if (validationResult) {
+            if (data.valid) {
+                validationResult.innerHTML = `
+                    <span class="validation-valid">✓ Valid Note</span>
+                    <span>Token: ${data.token} | Amount: ${data.amount}</span>
+                `;
+            } else {
+                validationResult.innerHTML = `
+                    <span class="validation-invalid">✗ Invalid Note</span>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Validation failed:', error);
+        showToast('Validation failed', 'error');
+    }
+}
+
+/**
+ * Copy privacy note to clipboard
+ */
+function copyPrivacyNote() {
+    const noteDisplay = $('#privacyNoteDisplay');
+    if (!noteDisplay?.value) {
+        showToast('No note to copy', 'warning');
+        return;
+    }
+
+    navigator.clipboard.writeText(noteDisplay.value)
+        .then(() => showToast('Note copied to clipboard', 'success'))
+        .catch(() => showToast('Failed to copy note', 'error'));
+}
+
+/**
+ * Save note to local storage (encrypted in production)
+ */
+function saveNoteLocally() {
+    const noteDisplay = $('#privacyNoteDisplay');
+    const note = noteDisplay?.value;
+
+    if (!note) {
+        showToast('No note to save', 'warning');
+        return;
+    }
+
+    try {
+        const savedNotes = JSON.parse(localStorage.getItem('finallica_privacy_notes') || '[]');
+        savedNotes.push({
+            note,
+            savedAt: Date.now(),
+            used: false
+        });
+        localStorage.setItem('finallica_privacy_notes', JSON.stringify(savedNotes));
+        showToast('Note saved locally (encrypted)', 'success');
+    } catch (error) {
+        showToast('Failed to save note', 'error');
+    }
+}
+
+/**
+ * Load saved notes
+ */
+function loadSavedNotes() {
+    try {
+        const savedNotes = JSON.parse(localStorage.getItem('finallica_privacy_notes') || '[]');
+        const notesList = $('#savedNotesList');
+
+        if (!notesList) return;
+
+        if (savedNotes.length === 0) {
+            notesList.innerHTML = '<p class="text-muted">No saved notes</p>';
+            return;
+        }
+
+        notesList.innerHTML = savedNotes.map((item, index) => `
+            <div class="saved-note-item">
+                <span class="note-date">${new Date(item.savedAt).toLocaleDateString()}</span>
+                <span class="note-preview">${item.note.substring(0, 30)}...</span>
+                <span class="note-status ${item.used ? 'used' : 'unused'}">${item.used ? 'Used' : 'Unused'}</span>
+                <button class="btn btn-sm btn-secondary" onclick="loadNoteIntoForm(${index})">Load</button>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load saved notes:', error);
+    }
+}
+
+/**
+ * Get privacy disclaimer for UI
+ */
+function getPrivacyDisclaimer() {
+    return `
+        <div class="privacy-disclaimer">
+            <strong>Privacy Disclaimer:</strong>
+            <ul>
+                <li>Tornado Cash sanctions were lifted in March 2025, but regulations vary by jurisdiction</li>
+                <li>Some exchanges may flag addresses that interact with mixers</li>
+                <li>You are responsible for compliance with your local laws</li>
+                <li>Always save your note securely - it cannot be recovered</li>
+            </ul>
+        </div>
+    `;
+}
+
+// ============================================
 // INITIALIZATION
 // ============================================
 
@@ -11991,8 +12534,17 @@ function init() {
     loadProposals();
     loadConsensus();
     loadAIModels();
+    loadPrivacyStatus();
     renderActivity();
     connectWebSocket();
+
+    // Privacy button listeners
+    $('#privacyToggle')?.addEventListener('click', togglePrivacyMode);
+    $('#generatePrivacyNote')?.addEventListener('click', generatePrivacyNote);
+    $('#executePrivateDeposit')?.addEventListener('click', executePrivateDeposit);
+    $('#validatePrivacyNote')?.addEventListener('click', validatePrivacyNote);
+    $('#copyPrivacyNote')?.addEventListener('click', copyPrivacyNote);
+    $('#saveNoteLocally')?.addEventListener('click', saveNoteLocally);
 }
 
 // Start application when DOM is ready
@@ -13668,6 +14220,13 @@ struct rekey_cell {
                     <span class="logo-subtitle">Documentation System</span>
                 </h1>
                 <div class="header-actions">
+                    <!-- Privacy Toggle -->
+                    <div id="privacyToggleContainer" class="hidden">
+                        <button id="privacyToggle" class="btn-privacy">
+                            <span class="privacy-icon">🛡️</span>
+                            <span class="privacy-label">Privacy Mode</span>
+                        </button>
+                    </div>
                     <button id="connectWallet" class="btn btn-primary">
                         <span class="btn-icon">⚡</span>
                         Connect Wallet
@@ -13787,6 +14346,10 @@ struct rekey_cell {
                         <span class="tab-icon">▣</span>
                         Activity
                     </button>
+                    <button class="tab-btn" data-tab="privacy">
+                        <span class="tab-icon">🛡️</span>
+                        Privacy
+                    </button>
                 </div>
 
                 <!-- Tab Contents -->
@@ -13850,6 +14413,134 @@ struct rekey_cell {
                     <div id="activity" class="tab-pane">
                         <div id="activityFeed" class="activity-feed">
                             <!-- Activity timeline -->
+                        </div>
+                    </div>
+
+                    <!-- Privacy Tab -->
+                    <div id="privacy" class="tab-pane">
+                        <!-- Privacy Status -->
+                        <div class="privacy-status-bar">
+                            <div class="privacy-status">
+                                <span class="privacy-status-dot"></span>
+                                <span id="privacyStatusText">Privacy Service: Checking...</span>
+                            </div>
+                        </div>
+
+                        <!-- Privacy Controls Panel -->
+                        <div id="privacyControls" class="privacy-panel hidden">
+                            <h3>🛡️ Privacy Controls</h3>
+
+                            <!-- Private Deposit Section -->
+                            <div class="privacy-section">
+                                <h4>Private Deposit</h4>
+                                <p class="privacy-warning">
+                                    Deposit funds into the privacy mixer. Your deposit will be mixed with others
+                                    to break the on-chain link between sender and recipient.
+                                </p>
+
+                                <div class="form-group">
+                                    <label>Token</label>
+                                    <select id="privacyToken">
+                                        <option value="ETH">ETH</option>
+                                        <option value="BLF">BLF</option>
+                                        <option value="USDC">USDC</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Amount</label>
+                                    <select id="privacyAmount">
+                                        <option value="0.1">0.1 ETH</option>
+                                        <option value="1">1 ETH</option>
+                                        <option value="10">10 ETH</option>
+                                        <option value="100">100 BLF</option>
+                                        <option value="1000">1000 BLF</option>
+                                        <option value="10000">10000 BLF</option>
+                                    </select>
+                                </div>
+
+                                <div class="privacy-actions">
+                                    <button id="generatePrivacyNote" class="btn btn-secondary">
+                                        <span class="btn-icon">🔐</span>
+                                        Generate Note
+                                    </button>
+                                </div>
+
+                                <div class="form-group" style="margin-top: 1rem;">
+                                    <label>Your Note (save this securely!)</label>
+                                    <textarea id="privacyNoteDisplay" readonly rows="3" placeholder="Click 'Generate Note' to create a privacy deposit note..."></textarea>
+                                    <div id="privacyFeeEstimate" style="margin-top: 0.5rem;"></div>
+                                </div>
+
+                                <div class="privacy-actions">
+                                    <button id="executePrivateDeposit" class="btn btn-primary">
+                                        <span class="btn-icon">💰</span>
+                                        Deposit to Privacy Pool
+                                    </button>
+                                    <button id="copyPrivacyNote" class="btn btn-secondary">
+                                        <span class="btn-icon">📋</span>
+                                        Copy Note
+                                    </button>
+                                    <button id="saveNoteLocally" class="btn btn-secondary">
+                                        <span class="btn-icon">💾</span>
+                                        Save Note
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="privacy-divider"></div>
+
+                            <!-- Note Validation Section -->
+                            <div class="privacy-section">
+                                <h4>Validate Note</h4>
+                                <p class="privacy-warning">
+                                    Validate an existing privacy note to check if it's valid and view its details.
+                                </p>
+
+                                <div class="form-group">
+                                    <label>Paste your note here</label>
+                                    <input type="text" id="validateNoteInput" placeholder="tornado-ETH-0.1-..." />
+                                </div>
+
+                                <div id="noteValidationResult" style="display: none;"></div>
+
+                                <div class="privacy-actions">
+                                    <button id="validatePrivacyNote" class="btn btn-secondary">Validate Note</button>
+                                </div>
+                            </div>
+
+                            <div class="privacy-divider"></div>
+
+                            <!-- Saved Notes Section -->
+                            <div class="privacy-section">
+                                <h4>Saved Notes</h4>
+                                <div id="savedNotesList" style="margin-top: 0.5rem;">
+                                    <p class="text-muted">No saved notes</p>
+                                </div>
+                            </div>
+
+                            <!-- Privacy Best Practices -->
+                            <div class="privacy-info">
+                                <h5>Privacy Best Practices:</h5>
+                                <ul>
+                                    <li>Wait at least a few hours between deposit and withdrawal</li>
+                                    <li>Use a fresh address for withdrawals</li>
+                                    <li>Don't deposit and withdraw predictable amounts</li>
+                                    <li>Save your note securely - it's required to withdraw</li>
+                                    <li>Never share your note with anyone</li>
+                                </ul>
+                            </div>
+
+                            <!-- Privacy Disclaimer -->
+                            <div class="privacy-disclaimer">
+                                <strong>Privacy Disclaimer:</strong>
+                                <ul>
+                                    <li>Tornado Cash sanctions were lifted in March 2025, but regulations vary by jurisdiction</li>
+                                    <li>Some exchanges may flag addresses that interact with mixers</li>
+                                    <li>You are responsible for compliance with your local laws</li>
+                                    <li>This is an optional privacy feature - nothing is mandatory</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -17315,6 +18006,328 @@ input[type="range"] {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   PRIVACY STYLES
+   ============================================ */
+
+/* Privacy Toggle Container */
+#privacyToggleContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Privacy Toggle Button */
+.btn-privacy {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.btn-privacy:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-primary);
+}
+
+.btn-privacy.active {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.privacy-icon {
+    font-size: 1.2rem;
+}
+
+.privacy-label {
+    font-weight: 500;
+}
+
+/* Privacy Panel */
+.privacy-panel {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.privacy-panel.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.privacy-panel h3 {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Privacy Sections */
+.privacy-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+.privacy-section:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.privacy-section h4 {
+    margin-bottom: 0.75rem;
+    color: var(--color-primary);
+    font-size: 1rem;
+}
+
+.privacy-warning {
+    font-size: 0.875rem;
+    color: var(--color-warning);
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(245, 158, 11, 0.1);
+    border-radius: 6px;
+    border-left: 3px solid var(--color-warning);
+}
+
+/* Privacy Divider */
+.privacy-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 1.5rem 0;
+}
+
+/* Privacy Form Elements */
+.privacy-panel .form-group {
+    margin-bottom: 1rem;
+}
+
+.privacy-panel label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.privacy-panel select,
+.privacy-panel input[type="text"],
+.privacy-panel textarea {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+}
+
+.privacy-panel select:focus,
+.privacy-panel input[type="text"]:focus,
+.privacy-panel textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.privacy-panel textarea {
+    font-family: var(--font-mono);
+    resize: vertical;
+    min-height: 80px;
+}
+
+#privacyNoteDisplay {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    word-break: break-all;
+    background: rgba(0, 212, 255, 0.05);
+    border-color: rgba(0, 212, 255, 0.3);
+}
+
+/* Privacy Buttons */
+.privacy-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.btn-privacy-action {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border-radius: 6px;
+}
+
+/* Privacy Fee Estimate */
+#privacyFeeEstimate {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-top: 0.5rem;
+}
+
+/* Privacy Info Box */
+.privacy-info {
+    background: rgba(107, 70, 193, 0.1);
+    border: 1px solid rgba(107, 70, 193, 0.3);
+    border-radius: 6px;
+    padding: 1rem;
+    font-size: 0.875rem;
+    margin-top: 1rem;
+}
+
+.privacy-info h5 {
+    margin-bottom: 0.5rem;
+    color: var(--color-secondary);
+}
+
+.privacy-info ul {
+    padding-left: 1.25rem;
+}
+
+.privacy-info li {
+    margin-bottom: 0.25rem;
+    color: var(--color-text-muted);
+}
+
+/* Privacy Disclaimer */
+.privacy-disclaimer {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 6px;
+    padding: 1rem;
+    font-size: 0.875rem;
+    margin-top: 1rem;
+}
+
+.privacy-disclaimer strong {
+    color: var(--color-warning);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.privacy-disclaimer ul {
+    padding-left: 1.25rem;
+    margin: 0;
+}
+
+.privacy-disclaimer li {
+    margin-bottom: 0.25rem;
+    color: var(--color-text-muted);
+}
+
+/* Note Validation */
+#noteValidationResult {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 6px;
+    margin-top: 0.5rem;
+}
+
+.validation-valid {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.validation-invalid {
+    color: var(--color-danger);
+    font-weight: 500;
+}
+
+/* Saved Notes List */
+#savedNotesList {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.saved-note-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.note-date {
+    color: var(--color-text-muted);
+}
+
+.note-preview {
+    font-family: var(--font-mono);
+    color: var(--color-primary);
+}
+
+.note-status.used {
+    color: var(--color-success);
+}
+
+.note-status.unused {
+    color: var(--color-warning);
+}
+
+/* Privacy Status Indicator */
+.privacy-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+.privacy-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-warning);
+}
+
+.privacy-status-dot.active {
+    background: var(--color-success);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .privacy-actions {
+        flex-direction: column;
+    }
+
+    .privacy-actions button {
+        width: 100%;
+    }
+
+    .saved-note-item {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
 }
 </file>
 

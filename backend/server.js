@@ -15,6 +15,7 @@ const db = require('./database');
 const GitSyncService = require('./services/git-sync');
 const RepositoryService = require('./services/repository-service');
 const createRepositoryRoutes = require('./routes/repositories');
+const createCollectionRoutes = require('./routes/collections');
 
 // Privacy Service
 const PrivacyService = require('./services/privacy-service');
@@ -79,6 +80,7 @@ async function initializeRepositorySystem() {
 
         // Register routes
         app.use('/api/repositories', createRepositoryRoutes(db, repositoryService, gitSync));
+        app.use('/api/collections', createCollectionRoutes(db));
 
         console.log('Multi-repository system initialized');
     } catch (error) {

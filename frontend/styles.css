@@ -1054,3 +1054,325 @@ input[type="range"] {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ============================================
+   PRIVACY STYLES
+   ============================================ */
+
+/* Privacy Toggle Container */
+#privacyToggleContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Privacy Toggle Button */
+.btn-privacy {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.btn-privacy:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-primary);
+}
+
+.btn-privacy.active {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.privacy-icon {
+    font-size: 1.2rem;
+}
+
+.privacy-label {
+    font-weight: 500;
+}
+
+/* Privacy Panel */
+.privacy-panel {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.privacy-panel.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.privacy-panel h3 {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Privacy Sections */
+.privacy-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+.privacy-section:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.privacy-section h4 {
+    margin-bottom: 0.75rem;
+    color: var(--color-primary);
+    font-size: 1rem;
+}
+
+.privacy-warning {
+    font-size: 0.875rem;
+    color: var(--color-warning);
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(245, 158, 11, 0.1);
+    border-radius: 6px;
+    border-left: 3px solid var(--color-warning);
+}
+
+/* Privacy Divider */
+.privacy-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 1.5rem 0;
+}
+
+/* Privacy Form Elements */
+.privacy-panel .form-group {
+    margin-bottom: 1rem;
+}
+
+.privacy-panel label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.privacy-panel select,
+.privacy-panel input[type="text"],
+.privacy-panel textarea {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+}
+
+.privacy-panel select:focus,
+.privacy-panel input[type="text"]:focus,
+.privacy-panel textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.privacy-panel textarea {
+    font-family: var(--font-mono);
+    resize: vertical;
+    min-height: 80px;
+}
+
+#privacyNoteDisplay {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    word-break: break-all;
+    background: rgba(0, 212, 255, 0.05);
+    border-color: rgba(0, 212, 255, 0.3);
+}
+
+/* Privacy Buttons */
+.privacy-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.btn-privacy-action {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border-radius: 6px;
+}
+
+/* Privacy Fee Estimate */
+#privacyFeeEstimate {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-top: 0.5rem;
+}
+
+/* Privacy Info Box */
+.privacy-info {
+    background: rgba(107, 70, 193, 0.1);
+    border: 1px solid rgba(107, 70, 193, 0.3);
+    border-radius: 6px;
+    padding: 1rem;
+    font-size: 0.875rem;
+    margin-top: 1rem;
+}
+
+.privacy-info h5 {
+    margin-bottom: 0.5rem;
+    color: var(--color-secondary);
+}
+
+.privacy-info ul {
+    padding-left: 1.25rem;
+}
+
+.privacy-info li {
+    margin-bottom: 0.25rem;
+    color: var(--color-text-muted);
+}
+
+/* Privacy Disclaimer */
+.privacy-disclaimer {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 6px;
+    padding: 1rem;
+    font-size: 0.875rem;
+    margin-top: 1rem;
+}
+
+.privacy-disclaimer strong {
+    color: var(--color-warning);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.privacy-disclaimer ul {
+    padding-left: 1.25rem;
+    margin: 0;
+}
+
+.privacy-disclaimer li {
+    margin-bottom: 0.25rem;
+    color: var(--color-text-muted);
+}
+
+/* Note Validation */
+#noteValidationResult {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 6px;
+    margin-top: 0.5rem;
+}
+
+.validation-valid {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.validation-invalid {
+    color: var(--color-danger);
+    font-weight: 500;
+}
+
+/* Saved Notes List */
+#savedNotesList {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.saved-note-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.note-date {
+    color: var(--color-text-muted);
+}
+
+.note-preview {
+    font-family: var(--font-mono);
+    color: var(--color-primary);
+}
+
+.note-status.used {
+    color: var(--color-success);
+}
+
+.note-status.unused {
+    color: var(--color-warning);
+}
+
+/* Privacy Status Indicator */
+.privacy-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+.privacy-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-warning);
+}
+
+.privacy-status-dot.active {
+    background: var(--color-success);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .privacy-actions {
+        flex-direction: column;
+    }
+
+    .privacy-actions button {
+        width: 100%;
+    }
+
+    .saved-note-item {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+}
