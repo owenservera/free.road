@@ -645,6 +645,578 @@ class DatabaseManager {
     }
 
     // ============================================
+    // MIGRATIONS
+    // ============================================
+
+    async runMigrations() {
+        // Create migrations tracking table if it doesn't exist
+        this.db.run(`
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT NOT NULL UNIQUE,
+                applied_at INTEGER DEFAULT (strftime('%s', 'now'))
+            )
+        `);
+
+        // Get available migrations
+        const migrations = await this.getMigrations();
+
+        for (const migration of migrations) {
+            const applied = this.db.exec(`SELECT 1 FROM schema_migrations WHERE version = '${migration.version}'`);
+            if (applied.length === 0) {
+                console.log(`Applying migration: ${migration.version}`);
+                await migration.up(this);
+                this.db.run(`INSERT INTO schema_migrations (version) VALUES ('${migration.version}')`);
+                await this.save();
+                console.log(`Migration ${migration.version} applied successfully`);
+            }
+        }
+    }
+
+    async getMigrations() {
+        const migrationsDir = path.join(__dirname, 'migrations');
+        const migrations = [];
+
+        try {
+            const files = await fs.readdir(migrationsDir);
+            for (const file of files) {
+                if (file.endsWith('.sql')) {
+                    const version = file.replace('.sql', '');
+                    const filePath = path.join(migrationsDir, file);
+                    const sql = await fs.readFile(filePath, 'utf8');
+                    migrations.push({
+                        version,
+                        up: async (db) => {
+                            // Split and execute each statement
+                            const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+                            for (const stmt of statements) {
+                                db.db.run(stmt);
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.log('No migrations directory found, skipping migrations');
+        }
+
+        return migrations.sort((a, b) => a.version.localeCompare(b.version));
+    }
+
+    // ============================================
+    // AGENT FLEET: API KEY POOLS
+    // ============================================
+
+    async createAPIKeyPool(pool) {
+        this.db.run(`
+            INSERT INTO api_key_pools (id, name, description, priority, keys_json, budget_limit, budget_period)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            pool.id,
+            pool.name,
+            pool.description || '',
+            pool.priority || 0,
+            JSON.stringify(pool.keys || {}),
+            pool.budget_limit || null,
+            pool.budget_period || null
+        ]);
+        await this.save();
+    }
+
+    getAPIKeyPool(id) {
+        const stmt = this.db.prepare('SELECT * FROM api_key_pools WHERE id = :id');
+        const pool = stmt.getAsObject({ ':id': id });
+        stmt.free();
+        if (pool) {
+            pool.keys_json = JSON.parse(pool.keys_json || '{}');
+        }
+        return pool;
+    }
+
+    getAllAPIKeyPools() {
+        const stmt = this.db.prepare('SELECT * FROM api_key_pools ORDER BY priority DESC');
+        const pools = [];
+        while (stmt.step()) {
+            const pool = stmt.getAsObject();
+            pool.keys_json = JSON.parse(pool.keys_json || '{}');
+            pools.push(pool);
+        }
+        stmt.free();
+        return pools;
+    }
+
+    // ============================================
+    // AGENT FLEET: AGENTS
+    // ============================================
+
+    async createAgent(agent) {
+        this.db.run(`
+            INSERT INTO agents (id, agent_type, model, provider, status, pool_id, config_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            agent.id,
+            agent.agent_type,
+            agent.model,
+            agent.provider,
+            agent.status || 'idle',
+            agent.pool_id || null,
+            JSON.stringify(agent.config || {})
+        ]);
+        await this.save();
+    }
+
+    getAgent(id) {
+        const stmt = this.db.prepare('SELECT * FROM agents WHERE id = :id');
+        const agent = stmt.getAsObject({ ':id': id });
+        stmt.free();
+        if (agent) {
+            agent.config_json = JSON.parse(agent.config_json || '{}');
+        }
+        return agent;
+    }
+
+    getAllAgents(filters = {}) {
+        let query = 'SELECT * FROM agents';
+        const params = {};
+
+        if (filters.status) {
+            query += ' WHERE status = :status';
+            params[':status'] = filters.status;
+        }
+
+        query += ' ORDER BY spawned_at DESC';
+
+        const stmt = this.db.prepare(query);
+        stmt.bind(params);
+        const agents = [];
+        while (stmt.step()) {
+            const agent = stmt.getAsObject();
+            agent.config_json = JSON.parse(agent.config_json || '{}');
+            agents.push(agent);
+        }
+        stmt.free();
+        return agents;
+    }
+
+    async updateAgent(id, updates) {
+        const fields = [];
+        const values = [];
+
+        if (updates.status !== undefined) {
+            fields.push('status = ?');
+            values.push(updates.status);
+        }
+        if (updates.current_task_id !== undefined) {
+            fields.push('current_task_id = ?');
+            values.push(updates.current_task_id);
+        }
+        if (updates.last_heartbeat_at !== undefined) {
+            fields.push('last_heartbeat_at = ?');
+            values.push(updates.last_heartbeat_at);
+        }
+        if (updates.terminated_at !== undefined) {
+            fields.push('terminated_at = ?');
+            values.push(updates.terminated_at);
+        }
+
+        if (fields.length > 0) {
+            values.push(id);
+            this.db.run(`UPDATE agents SET ${fields.join(', ')} WHERE id = ?`, values);
+            await this.save();
+        }
+    }
+
+    // ============================================
+    // AGENT FLEET: AGENT TASKS
+    // ============================================
+
+    async createAgentTask(task) {
+        this.db.run(`
+            INSERT INTO agent_tasks (id, agent_id, agent_type, task_type, task_data, priority, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            task.id,
+            task.agent_id || null,
+            task.agent_type,
+            task.task_type,
+            JSON.stringify(task.task_data || {}),
+            task.priority || 5,
+            task.status || 'queued'
+        ]);
+        await this.save();
+    }
+
+    getAgentTask(id) {
+        const stmt = this.db.prepare('SELECT * FROM agent_tasks WHERE id = :id');
+        const task = stmt.getAsObject({ ':id': id });
+        stmt.free();
+        if (task) {
+            task.task_data = JSON.parse(task.task_data || '{}');
+            task.result_json = JSON.parse(task.result_json || '{}');
+        }
+        return task;
+    }
+
+    getPendingTasks(limit = 50) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM agent_tasks
+            WHERE status = 'queued'
+            ORDER BY priority DESC, created_at ASC
+            LIMIT :limit
+        `);
+        stmt.bind({ ':limit': limit });
+        const tasks = [];
+        while (stmt.step()) {
+            const task = stmt.getAsObject();
+            task.task_data = JSON.parse(task.task_data || '{}');
+            task.result_json = JSON.parse(task.result_json || '{}');
+            tasks.push(task);
+        }
+        stmt.free();
+        return tasks;
+    }
+
+    getAgentTasks(agentId) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM agent_tasks
+            WHERE agent_id = :agent_id
+            ORDER BY created_at DESC
+        `);
+        stmt.bind({ ':agent_id': agentId });
+        const tasks = [];
+        while (stmt.step()) {
+            const task = stmt.getAsObject();
+            task.task_data = JSON.parse(task.task_data || '{}');
+            task.result_json = JSON.parse(task.result_json || '{}');
+            tasks.push(task);
+        }
+        stmt.free();
+        return tasks;
+    }
+
+    async updateAgentTask(id, updates) {
+        const fields = [];
+        const values = [];
+
+        if (updates.status !== undefined) {
+            fields.push('status = ?');
+            values.push(updates.status);
+        }
+        if (updates.agent_id !== undefined) {
+            fields.push('agent_id = ?');
+            values.push(updates.agent_id);
+        }
+        if (updates.result_json !== undefined) {
+            fields.push('result_json = ?');
+            values.push(JSON.stringify(updates.result_json));
+        }
+        if (updates.error_message !== undefined) {
+            fields.push('error_message = ?');
+            values.push(updates.error_message);
+        }
+        if (updates.retry_count !== undefined) {
+            fields.push('retry_count = ?');
+            values.push(updates.retry_count);
+        }
+        if (updates.started_at !== undefined) {
+            fields.push('started_at = ?');
+            values.push(updates.started_at);
+        }
+        if (updates.completed_at !== undefined) {
+            fields.push('completed_at = ?');
+            values.push(updates.completed_at);
+        }
+
+        if (fields.length > 0) {
+            values.push(id);
+            this.db.run(`UPDATE agent_tasks SET ${fields.join(', ')} WHERE id = ?`, values);
+            await this.save();
+        }
+    }
+
+    // ============================================
+    // AGENT FLEET: AGENT COSTS
+    // ============================================
+
+    async createAgentCost(cost) {
+        this.db.run(`
+            INSERT INTO agent_costs (id, agent_id, task_id, provider, model, input_tokens, output_tokens, cost)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            cost.id,
+            cost.agent_id,
+            cost.task_id || null,
+            cost.provider,
+            cost.model,
+            cost.input_tokens || 0,
+            cost.output_tokens || 0,
+            cost.cost
+        ]);
+        await this.save();
+    }
+
+    getAgentCosts(agentId, period = 'day') {
+        let timeFilter = '';
+        const now = Math.floor(Date.now() / 1000);
+
+        if (period === 'hour') {
+            timeFilter = `AND timestamp >= ${now - 3600}`;
+        } else if (period === 'day') {
+            timeFilter = `AND timestamp >= ${now - 86400}`;
+        } else if (period === 'week') {
+            timeFilter = `AND timestamp >= ${now - 604800}`;
+        } else if (period === 'month') {
+            timeFilter = `AND timestamp >= ${now - 2592000}`;
+        }
+
+        const stmt = this.db.prepare(`
+            SELECT * FROM agent_costs
+            WHERE agent_id = :agent_id ${timeFilter}
+            ORDER BY timestamp DESC
+        `);
+        stmt.bind({ ':agent_id': agentId });
+        const costs = [];
+        while (stmt.step()) {
+            costs.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return costs;
+    }
+
+    async getTotalAgentCost(agentId, period = 'day') {
+        const costs = this.getAgentCosts(agentId, period);
+        return costs.reduce((sum, c) => sum + c.cost, 0);
+    }
+
+    getCostSummary(period = 'day') {
+        let timeFilter = '';
+        const now = Math.floor(Date.now() / 1000);
+
+        if (period === 'hour') {
+            timeFilter = `WHERE timestamp >= ${now - 3600}`;
+        } else if (period === 'day') {
+            timeFilter = `WHERE timestamp >= ${now - 86400}`;
+        } else if (period === 'week') {
+            timeFilter = `WHERE timestamp >= ${now - 604800}`;
+        } else if (period === 'month') {
+            timeFilter = `WHERE timestamp >= ${now - 2592000}`;
+        }
+
+        const stmt = this.db.prepare(`
+            SELECT
+                agent_id,
+                provider,
+                model,
+                SUM(input_tokens) as total_input_tokens,
+                SUM(output_tokens) as total_output_tokens,
+                SUM(cost) as total_cost,
+                COUNT(*) as request_count
+            FROM agent_costs
+            ${timeFilter}
+            GROUP BY agent_id, provider, model
+        `);
+
+        const summary = [];
+        while (stmt.step()) {
+            summary.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return summary;
+    }
+
+    // ============================================
+    // AGENT FLEET: AGENT BUDGETS
+    // ============================================
+
+    async createAgentBudget(budget) {
+        this.db.run(`
+            INSERT INTO agent_budgets (id, agent_id, pool_id, limit, period, current_spent, alert_threshold)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            budget.id,
+            budget.agent_id || null,
+            budget.pool_id || null,
+            budget.limit,
+            budget.period,
+            budget.current_spent || 0,
+            budget.alert_threshold || 0.8
+        ]);
+        await this.save();
+    }
+
+    getAgentBudget(agentId) {
+        const stmt = this.db.prepare('SELECT * FROM agent_budgets WHERE agent_id = :agent_id');
+        const budget = stmt.getAsObject({ ':agent_id': agentId });
+        stmt.free();
+        return budget;
+    }
+
+    getAllBudgets() {
+        const stmt = this.db.prepare('SELECT * FROM agent_budgets');
+        const budgets = [];
+        while (stmt.step()) {
+            budgets.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return budgets;
+    }
+
+    async updateBudgetSpent(agentId, amount) {
+        this.db.run(`
+            UPDATE agent_budgets SET current_spent = current_spent + ?
+            WHERE agent_id = ?
+        `, [amount, agentId]);
+        await this.save();
+    }
+
+    // ============================================
+    // AGENT FLEET: DEV MODE ACTIVITY
+    // ============================================
+
+    async createAgentSession(session) {
+        this.db.run(`
+            INSERT INTO agent_sessions (id, trigger_type)
+            VALUES (?, ?)
+        `, [session.id, session.trigger_type || 'manual']);
+        await this.save();
+        return session.id;
+    }
+
+    async logDevModeActivity(sessionId, activityType, data) {
+        this.db.run(`
+            INSERT INTO dev_mode_activity (session_id, activity_type, data)
+            VALUES (?, ?, ?)
+        `, [sessionId || null, activityType, JSON.stringify(data || {})]);
+        await this.save();
+    }
+
+    getRecentDevModeActivity(limit = 100) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM dev_mode_activity
+            ORDER BY timestamp DESC
+            LIMIT :limit
+        `);
+        stmt.bind({ ':limit': limit });
+        const activities = [];
+        while (stmt.step()) {
+            const activity = stmt.getAsObject();
+            activity.data = JSON.parse(activity.data || '{}');
+            activities.push(activity);
+        }
+        stmt.free();
+        return activities;
+    }
+
+    // ============================================
+    // AGENT FLEET: OBSERVABILITY
+    // ============================================
+
+    async logObservabilityMetric(agentId, metricType, metricValue, metricUnit = '', tags = {}) {
+        this.db.run(`
+            INSERT INTO observability_metrics (agent_id, metric_type, metric_value, metric_unit, tags)
+            VALUES (?, ?, ?, ?, ?)
+        `, [agentId, metricType, metricValue, metricUnit, JSON.stringify(tags)]);
+        await this.save();
+    }
+
+    getObservabilityMetrics(agentId, metricType = null) {
+        let query = 'SELECT * FROM observability_metrics WHERE agent_id = :agent_id';
+        const params = { ':agent_id': agentId };
+
+        if (metricType) {
+            query += ' AND metric_type = :metric_type';
+            params[':metric_type'] = metricType;
+        }
+
+        query += ' ORDER BY timestamp DESC LIMIT 1000';
+
+        const stmt = this.db.prepare(query);
+        stmt.bind(params);
+        const metrics = [];
+        while (stmt.step()) {
+            const metric = stmt.getAsObject();
+            metric.tags = JSON.parse(metric.tags || '{}');
+            metrics.push(metric);
+        }
+        stmt.free();
+        return metrics;
+    }
+
+    async logObservabilityLog(agentId, level, message, data = {}) {
+        this.db.run(`
+            INSERT INTO observability_logs (agent_id, level, message, data)
+            VALUES (?, ?, ?, ?)
+        `, [agentId || null, level, message, JSON.stringify(data)]);
+        await this.save();
+    }
+
+    getObservabilityLogs(agentId = null, level = null, limit = 100) {
+        let query = 'SELECT * FROM observability_logs';
+        const params = { ':limit': limit };
+        const conditions = [];
+
+        if (agentId) {
+            conditions.push('agent_id = :agent_id');
+            params[':agent_id'] = agentId;
+        }
+        if (level) {
+            conditions.push('level = :level');
+            params[':level'] = level;
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' ORDER BY timestamp DESC LIMIT :limit';
+
+        const stmt = this.db.prepare(query);
+        stmt.bind(params);
+        const logs = [];
+        while (stmt.step()) {
+            const log = stmt.getAsObject();
+            log.data = JSON.parse(log.data || '{}');
+            logs.push(log);
+        }
+        stmt.free();
+        return logs;
+    }
+
+    async createObservabilityAlert(alertType, severity, agentId, message, data = {}) {
+        this.db.run(`
+            INSERT INTO observability_alerts (alert_type, severity, agent_id, message, data)
+            VALUES (?, ?, ?, ?, ?)
+        `, [alertType, severity, agentId || null, message, JSON.stringify(data)]);
+        await this.save();
+    }
+
+    getObservabilityAlerts(acknowledgedOnly = false) {
+        let query = 'SELECT * FROM observability_alerts';
+        if (!acknowledgedOnly) {
+            query += ' WHERE acknowledged = 0';
+        }
+        query += ' ORDER BY created_at DESC';
+
+        const stmt = this.db.prepare(query);
+        const alerts = [];
+        while (stmt.step()) {
+            const alert = stmt.getAsObject();
+            alert.data = JSON.parse(alert.data || '{}');
+            alerts.push(alert);
+        }
+        stmt.free();
+        return alerts;
+    }
+
+    async acknowledgeAlert(alertId) {
+        this.db.run(`
+            UPDATE observability_alerts SET acknowledged = 1, acknowledged_at = ?
+            WHERE id = ?
+        `, [Math.floor(Date.now() / 1000), alertId]);
+        await this.save();
+    }
+
+    // ============================================
     // UTILITY
     // ============================================
 

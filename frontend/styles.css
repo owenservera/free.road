@@ -1376,3 +1376,221 @@ input[type="range"] {
         gap: 0.25rem;
     }
 }
+
+/* ============================================
+   AI SETTINGS MODAL STYLES
+   ============================================ */
+
+.chat-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-icon-small {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+}
+
+.btn-icon-small:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+}
+
+.modal-large {
+    max-width: 700px;
+    width: 90%;
+}
+
+.ai-settings-info {
+    padding: 0.75rem;
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.provider-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.5rem;
+    overflow-x: auto;
+}
+
+.provider-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.provider-tab:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text);
+}
+
+.provider-tab.active {
+    background: var(--color-bg-secondary);
+    color: var(--color-primary);
+    border-bottom: 2px solid var(--color-primary);
+}
+
+.provider-logo {
+    font-size: 1rem;
+}
+
+.provider-panels {
+    position: relative;
+    min-height: 300px;
+}
+
+.provider-panel {
+    display: none;
+}
+
+.provider-panel.active {
+    display: block;
+}
+
+.provider-desc {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+}
+
+.provider-desc a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.provider-desc a:hover {
+    text-decoration: underline;
+}
+
+.api-key-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.key-status {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.key-status-success {
+    background: rgba(52, 211, 153, 0.1);
+    color: var(--color-success);
+}
+
+.key-status-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+}
+
+.key-status-warning {
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--color-warning);
+}
+
+.key-status-info {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--color-info);
+}
+
+.status-icon {
+    font-weight: bold;
+}
+
+.stored-keys-summary {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.stored-keys-summary h4 {
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-text);
+}
+
+.stored-keys-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stored-key-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+}
+
+.stored-key-provider {
+    font-weight: 500;
+}
+
+.stored-key-masked {
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+}
+
+.stored-key-date {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* Responsive adjustments for AI Settings */
+@media (max-width: 768px) {
+    .provider-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .stored-key-item {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+
+    .api-key-actions {
+        flex-direction: column;
+    }
+
+    .api-key-actions button {
+        width: 100%;
+    }
+}

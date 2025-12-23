@@ -155,8 +155,13 @@
                     <div id="ai-chat" class="tab-pane active">
                         <div class="chat-header">
                             <h3>AI Assistant</h3>
-                            <div id="aiModelSelector" class="ai-model-selector">
-                                <!-- Provider and model selectors will be rendered here -->
+                            <div class="chat-header-controls">
+                                <div id="aiModelSelector" class="ai-model-selector">
+                                    <!-- Provider and model selectors will be rendered here -->
+                                </div>
+                                <button id="aiSettingsBtn" class="btn-icon-small" title="AI Settings">
+                                    <span>⚙️</span>
+                                </button>
                             </div>
                         </div>
                         <div id="chatMessages" class="chat-messages">
@@ -426,6 +431,172 @@
                         <input type="range" id="stakeWeight" min="1" max="100" value="100">
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Settings Modal -->
+    <div id="aiSettingsModal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>AI Provider Settings</h2>
+                <button id="closeAiSettingsModal" class="btn-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="ai-settings-info">
+                    <p>Configure your own API keys to use AI providers. Keys are stored locally in your browser and never sent to our servers.</p>
+                </div>
+
+                <!-- Provider Tabs -->
+                <div class="provider-tabs">
+                    <button class="provider-tab active" data-provider="anthropic">
+                        <span class="provider-logo">🟣</span>
+                        Anthropic
+                    </button>
+                    <button class="provider-tab" data-provider="openai">
+                        <span class="provider-logo">🔵</span>
+                        OpenAI
+                    </button>
+                    <button class="provider-tab" data-provider="openrouter">
+                        <span class="provider-logo">🟢</span>
+                        OpenRouter
+                    </button>
+                    <button class="provider-tab" data-provider="groq">
+                        <span class="provider-logo">⚡</span>
+                        Groq
+                    </button>
+                </div>
+
+                <!-- Provider Configuration Panels -->
+                <div class="provider-panels">
+                    <!-- Anthropic Panel -->
+                    <div id="panel-anthropic" class="provider-panel active">
+                        <h4>Anthropic Claude API</h4>
+                        <p class="provider-desc">Get your API key from <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
+
+                        <div class="form-group">
+                            <label for="anthropicApiKey">API Key</label>
+                            <input type="password" id="anthropicApiKey" class="form-control" placeholder="sk-ant-xxxxx">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="anthropicModel">Default Model</label>
+                            <select id="anthropicModel" class="form-control">
+                                <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (New)</option>
+                                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                                <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                            </select>
+                        </div>
+
+                        <div class="api-key-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="testApiKey('anthropic')">Test Key</button>
+                            <button class="btn btn-secondary btn-sm" onclick="saveApiKey('anthropic')">Save Key</button>
+                            <button class="btn btn-danger btn-sm" onclick="clearApiKey('anthropic')">Clear Key</button>
+                        </div>
+
+                        <div id="anthropicKeyStatus" class="key-status"></div>
+                    </div>
+
+                    <!-- OpenAI Panel -->
+                    <div id="panel-openai" class="provider-panel">
+                        <h4>OpenAI API</h4>
+                        <p class="provider-desc">Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></p>
+
+                        <div class="form-group">
+                            <label for="openaiApiKey">API Key</label>
+                            <input type="password" id="openaiApiKey" class="form-control" placeholder="sk-proj-xxxxx">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="openaiModel">Default Model</label>
+                            <select id="openaiModel" class="form-control">
+                                <option value="gpt-4o">GPT-4o</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            </select>
+                        </div>
+
+                        <div class="api-key-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="testApiKey('openai')">Test Key</button>
+                            <button class="btn btn-secondary btn-sm" onclick="saveApiKey('openai')">Save Key</button>
+                            <button class="btn btn-danger btn-sm" onclick="clearApiKey('openai')">Clear Key</button>
+                        </div>
+
+                        <div id="openaiKeyStatus" class="key-status"></div>
+                    </div>
+
+                    <!-- OpenRouter Panel -->
+                    <div id="panel-openrouter" class="provider-panel">
+                        <h4>OpenRouter API</h4>
+                        <p class="provider-desc">Get your API key from <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai</a></p>
+
+                        <div class="form-group">
+                            <label for="openrouterApiKey">API Key</label>
+                            <input type="password" id="openrouterApiKey" class="form-control" placeholder="sk-or-xxxxx">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="openrouterModel">Default Model</label>
+                            <select id="openrouterModel" class="form-control">
+                                <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
+                                <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                                <option value="openai/gpt-4o">GPT-4o</option>
+                                <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+                                <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+                            </select>
+                        </div>
+
+                        <div class="api-key-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="testApiKey('openrouter')">Test Key</button>
+                            <button class="btn btn-secondary btn-sm" onclick="saveApiKey('openrouter')">Save Key</button>
+                            <button class="btn btn-danger btn-sm" onclick="clearApiKey('openrouter')">Clear Key</button>
+                        </div>
+
+                        <div id="openrouterKeyStatus" class="key-status"></div>
+                    </div>
+
+                    <!-- Groq Panel -->
+                    <div id="panel-groq" class="provider-panel">
+                        <h4>Groq API</h4>
+                        <p class="provider-desc">Get your free API key from <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a></p>
+
+                        <div class="form-group">
+                            <label for="groqApiKey">API Key</label>
+                            <input type="password" id="groqApiKey" class="form-control" placeholder="gsk_xxxxx">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="groqModel">Default Model</label>
+                            <select id="groqModel" class="form-control">
+                                <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+                                <option value="llama-3.1-70b-versatile">Llama 3.1 70B</option>
+                                <option value="mixtral-8x7b-32768">Mixtral 8x7b</option>
+                                <option value="gemma2-9b-it">Gemma 2 9B</option>
+                            </select>
+                        </div>
+
+                        <div class="api-key-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="testApiKey('groq')">Test Key</button>
+                            <button class="btn btn-secondary btn-sm" onclick="saveApiKey('groq')">Save Key</button>
+                            <button class="btn btn-danger btn-sm" onclick="clearApiKey('groq')">Clear Key</button>
+                        </div>
+
+                        <div id="groqKeyStatus" class="key-status"></div>
+                    </div>
+                </div>
+
+                <!-- Stored Keys Summary -->
+                <div class="stored-keys-summary">
+                    <h4>Your Stored Keys</h4>
+                    <div id="storedKeysList" class="stored-keys-list">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeAiSettingsFooter" class="btn btn-primary">Done</button>
             </div>
         </div>
     </div>

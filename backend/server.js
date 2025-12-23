@@ -20,11 +20,16 @@ const createCollectionRoutes = require('./routes/collections');
 // Privacy Service
 const PrivacyService = require('./services/privacy-service');
 
+// AI Services (2025 Upgrade)
+const AIProviderService = require('./services/ai-provider-service');
+const StreamingService = require('./services/streaming-service');
+const createAIRoutes = require('./routes/ai');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DOCS_PATH = path.join(__dirname, '../docs/finallica');
 
 // Configuration
@@ -91,6 +96,9 @@ async function initializeRepositorySystem() {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Serve static files from frontend
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // ============================================
 // DOCUMENT ROUTES
@@ -324,68 +332,9 @@ app.get('/api/consensus', (req, res) => {
 // AI CHAT ROUTES
 // ============================================
 
-// AI Provider Configuration
-const AI_PROVIDERS = {
-    anthropic: {
-        name: 'Anthropic Claude',
-        baseUrl: 'https://api.anthropic.com/v1/messages',
-        models: {
-            'claude-sonnet-4-20250514': { name: 'Claude Sonnet 4', maxTokens: 200000, contextWindow: 200000 },
-            'claude-3-5-sonnet-20241022': { name: 'Claude 3.5 Sonnet', maxTokens: 200000, contextWindow: 200000 },
-            'claude-3-5-haiku-20241022': { name: 'Claude 3.5 Haiku', maxTokens: 200000, contextWindow: 200000 },
-            'claude-3-opus-20240229': { name: 'Claude 3 Opus', maxTokens: 200000, contextWindow: 200000 }
-        },
-        headers: (apiKey) => ({
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json'
-        })
-    },
-    openai: {
-        name: 'OpenAI GPT',
-        baseUrl: 'https://api.openai.com/v1/chat/completions',
-        models: {
-            'gpt-4o': { name: 'GPT-4o', maxTokens: 128000, contextWindow: 128000 },
-            'gpt-4o-mini': { name: 'GPT-4o Mini', maxTokens: 128000, contextWindow: 128000 },
-            'gpt-4-turbo': { name: 'GPT-4 Turbo', maxTokens: 128000, contextWindow: 128000 },
-            'gpt-3.5-turbo': { name: 'GPT-3.5 Turbo', maxTokens: 16385, contextWindow: 16385 }
-        },
-        headers: (apiKey) => ({
-            'Authorization': `Bearer ${apiKey}`,
-            'content-type': 'application/json'
-        })
-    },
-    openrouter: {
-        name: 'OpenRouter',
-        baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
-        models: {
-            'anthropic/claude-sonnet-4': { name: 'Claude Sonnet 4 (via OpenRouter)', maxTokens: 200000, contextWindow: 200000 },
-            'anthropic/claude-3.5-sonnet': { name: 'Claude 3.5 Sonnet (via OpenRouter)', maxTokens: 200000, contextWindow: 200000 },
-            'openai/gpt-4o': { name: 'GPT-4o (via OpenRouter)', maxTokens: 128000, contextWindow: 128000 },
-            'google/gemini-pro-1.5': { name: 'Gemini Pro 1.5 (via OpenRouter)', maxTokens: 1000000, contextWindow: 1000000 },
-            'meta-llama/llama-3.1-70b-instruct': { name: 'Llama 3.1 70B (via OpenRouter)', maxTokens: 131072, contextWindow: 131072 }
-        },
-        headers: (apiKey) => ({
-            'Authorization': `Bearer ${apiKey}`,
-            'content-type': 'application/json',
-            'HTTP-Referer': 'https://finallica.io',
-            'X-Title': 'Finallica Documentation'
-        })
-    },
-    groq: {
-        name: 'Groq',
-        baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
-        models: {
-            'llama-3.3-70b-versatile': { name: 'Llama 3.3 70B', maxTokens: 131072, contextWindow: 131072 },
-            'llama-3.1-70b-versatile': { name: 'Llama 3.1 70B', maxTokens: 131072, contextWindow: 131072 },
-            'mixtral-8x7b-32768': { name: 'Mixtral 8x7b', maxTokens: 32768, contextWindow: 32768 }
-        },
-        headers: (apiKey) => ({
-            'Authorization': `Bearer ${apiKey}`,
-            'content-type': 'application/json'
-        })
-    }
-};
+// ============================================
+// AI CHAT SERVICES (2025 Upgrade)
+// ============================================
 
 // API Key Management (with rotation)
 class APIKeyManager {
@@ -475,6 +424,13 @@ class APIKeyManager {
 
 const keyManager = new APIKeyManager();
 
+// Initialize AI Services (2025 Upgrade)
+const aiProviderService = new AIProviderService(keyManager);
+const streamingService = new StreamingService();
+
+// Register AI routes
+app.use('/api/ai', createAIRoutes(aiProviderService, streamingService, keyManager));
+
 // Default model configuration
 const DEFAULT_MODEL = process.env.AI_MODEL || 'claude-3-5-sonnet-20241022';
 const DEFAULT_PROVIDER = process.env.AI_PROVIDER || 'anthropic';
@@ -482,15 +438,17 @@ const DEFAULT_PROVIDER = process.env.AI_PROVIDER || 'anthropic';
 // Chat endpoint with model selection
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, context, provider, model, stream = false } = req.body;
+        const { message, context, provider, model, stream = false, userApiKey } = req.body;
 
         const selectedProvider = provider || DEFAULT_PROVIDER;
         const selectedModel = model || DEFAULT_MODEL;
 
-        // Check if provider has keys
-        if (!keyManager.hasKeys(selectedProvider)) {
+        // Use user-provided API key if available, otherwise check if server has keys
+        const apiKey = userApiKey || null;
+
+        if (!apiKey && !keyManager.hasKeys(selectedProvider)) {
             return res.status(400).json({
-                error: `No API keys configured for provider: ${selectedProvider}`,
+                error: `No API keys configured for provider: ${selectedProvider}. Please add your API key in settings.`,
                 availableProviders: keyManager.getAvailableProviders()
             });
         }
@@ -502,7 +460,7 @@ app.post('/api/chat', async (req, res) => {
         const messages = context && context.history ? context.history : [];
 
         // Call the appropriate AI provider
-        const response = await callAIProvider(selectedProvider, selectedModel, systemPrompt, message, messages);
+        const response = await callAIProvider(selectedProvider, selectedModel, systemPrompt, message, messages, apiKey);
 
         res.json({
             response: response.content,
@@ -537,6 +495,80 @@ app.get('/api/ai/models', (req, res) => {
 // Get AI usage stats endpoint
 app.get('/api/ai/stats', (req, res) => {
     res.json({ stats: keyManager.getStats(), availableProviders: keyManager.getAvailableProviders() });
+});
+
+// Test user-provided API key endpoint
+app.post('/api/ai/test-key', async (req, res) => {
+    try {
+        const { provider, apiKey } = req.body;
+
+        if (!provider || !apiKey) {
+            return res.status(400).json({ valid: false, error: 'Provider and API key are required' });
+        }
+
+        if (!AI_PROVIDERS[provider]) {
+            return res.status(400).json({ valid: false, error: 'Unknown provider' });
+        }
+
+        // Test the API key with a minimal request
+        const providerConfig = AI_PROVIDERS[provider];
+        let testModel = Object.keys(providerConfig.models)[0];
+
+        let apiUrl = providerConfig.baseUrl;
+        let requestBody, headers;
+
+        if (provider === 'anthropic') {
+            apiUrl = 'https://api.anthropic.com/v1/messages';
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            };
+            requestBody = {
+                model: testModel,
+                max_tokens: 10,
+                messages: [{ role: 'user', content: 'Hi' }]
+            };
+        } else if (provider === 'openai' || provider === 'groq' || provider === 'openrouter') {
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            };
+            if (provider === 'openrouter') {
+                headers['HTTP-Referer'] = 'https://finallica.io';
+                headers['X-Title'] = 'Finallica';
+            }
+            requestBody = {
+                model: testModel,
+                messages: [{ role: 'user', content: 'Hi' }],
+                max_tokens: 10
+            };
+        }
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody)
+        });
+
+        if (response.ok) {
+            res.json({
+                valid: true,
+                provider,
+                model: testModel,
+                message: 'API key is valid'
+            });
+        } else {
+            const errorData = await response.text();
+            res.json({
+                valid: false,
+                error: `API returned ${response.status}: ${errorData.substring(0, 200)}`
+            });
+        }
+    } catch (error) {
+        console.error('API key test error:', error);
+        res.json({ valid: false, error: error.message });
+    }
 });
 
 // ============================================
@@ -759,9 +791,9 @@ Answer questions clearly and technically. Use code examples when helpful. Refere
 `;
 }
 
-async function callAIProvider(provider, model, systemPrompt, userMessage, history = []) {
+async function callAIProvider(provider, model, systemPrompt, userMessage, history = [], userApiKey = null) {
     const providerConfig = AI_PROVIDERS[provider];
-    const apiKey = keyManager.getNextKey(provider);
+    const apiKey = userApiKey || keyManager.getNextKey(provider);
 
     if (!apiKey) {
         throw new Error(`No API key available for provider: ${provider}`);

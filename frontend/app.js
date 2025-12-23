@@ -3,8 +3,8 @@
 // AI chat, proposals, voting, and consensus
 
 const CONFIG = {
-    API_BASE: 'http://localhost:3000/api',
-    WS_BASE: 'ws://localhost:3000/ws',
+    API_BASE: 'http://localhost:4000/api',
+    WS_BASE: 'ws://localhost:4000/ws',
     CHAIN_ID: 31337, // Finallica testnet chain ID
     MIN_STAKE_PROPOSAL: 1000, // BLF
     VOTING_PERIOD: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
@@ -446,21 +446,32 @@ async function sendChatMessage() {
     // Show typing indicator
     showTyping();
 
+    // Get user-provided API key for selected provider
+    const selectedProvider = state.selectedProvider || state.aiDefaults.provider;
+    const userApiKey = getApiKeyForProvider(selectedProvider);
+
     try {
+        const requestBody = {
+            message,
+            provider: selectedProvider,
+            model: state.selectedModel || state.aiDefaults.model,
+            context: {
+                currentDoc: state.currentDoc,
+                documents: Object.keys(state.documents),
+                proposals: state.proposals,
+                history: state.chatHistory.slice(-20) // Last 20 messages
+            }
+        };
+
+        // Include user API key if available
+        if (userApiKey) {
+            requestBody.userApiKey = userApiKey;
+        }
+
         const response = await fetch(`${CONFIG.API_BASE}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message,
-                provider: state.selectedProvider || state.aiDefaults.provider,
-                model: state.selectedModel || state.aiDefaults.model,
-                context: {
-                    currentDoc: state.currentDoc,
-                    documents: Object.keys(state.documents),
-                    proposals: state.proposals,
-                    history: state.chatHistory.slice(-20) // Last 20 messages
-                }
-            })
+            body: JSON.stringify(requestBody)
         });
 
         const data = await response.json();
@@ -840,6 +851,236 @@ function generateId() {
 }
 
 // ============================================
+// API KEY MANAGEMENT (User-provided keys)
+// ============================================
+
+const AI_API_KEYS_STORAGE = 'finallica_ai_api_keys';
+
+/**
+ * Get stored API keys from localStorage
+ */
+function getStoredApiKeys() {
+    try {
+        const stored = localStorage.getItem(AI_API_KEYS_STORAGE);
+        return stored ? JSON.parse(stored) : {};
+    } catch (error) {
+        console.error('Failed to load stored API keys:', error);
+        return {};
+    }
+}
+
+/**
+ * Save API key to localStorage
+ */
+function saveApiKeyToStorage(provider, apiKey, model = null) {
+    try {
+        const keys = getStoredApiKeys();
+        keys[provider] = {
+            apiKey: apiKey,
+            model: model,
+            updatedAt: Date.now()
+        };
+        localStorage.setItem(AI_API_KEYS_STORAGE, JSON.stringify(keys));
+        return true;
+    } catch (error) {
+        console.error('Failed to save API key:', error);
+        return false;
+    }
+}
+
+/**
+ * Remove API key from localStorage
+ */
+function removeApiKeyFromStorage(provider) {
+    try {
+        const keys = getStoredApiKeys();
+        delete keys[provider];
+        localStorage.setItem(AI_API_KEYS_STORAGE, JSON.stringify(keys));
+        return true;
+    } catch (error) {
+        console.error('Failed to remove API key:', error);
+        return false;
+    }
+}
+
+/**
+ * Get API key for a provider
+ */
+function getApiKeyForProvider(provider) {
+    const keys = getStoredApiKeys();
+    return keys[provider]?.apiKey || null;
+}
+
+/**
+ * Get all providers with stored keys
+ */
+function getProvidersWithKeys() {
+    const keys = getStoredApiKeys();
+    return Object.keys(keys).filter(provider => keys[provider]?.apiKey);
+}
+
+/**
+ * Save API key from UI
+ */
+function saveApiKey(provider) {
+    const inputId = `${provider}ApiKey`;
+    const modelId = `${provider}Model`;
+    const apiKey = document.getElementById(inputId)?.value.trim();
+    const model = document.getElementById(modelId)?.value;
+
+    if (!apiKey) {
+        showKeyStatus(provider, 'error', 'Please enter an API key');
+        return;
+    }
+
+    // Validate key format
+    const keyPatterns = {
+        anthropic: /^sk-ant-/,
+        openai: /^sk-proj-|^sk-/,
+        openrouter: /^sk-or-/,
+        groq: /^gsk_/
+    };
+
+    if (keyPatterns[provider] && !keyPatterns[provider].test(apiKey)) {
+        showKeyStatus(provider, 'warning', 'Key format may be incorrect');
+    }
+
+    if (saveApiKeyToStorage(provider, apiKey, model)) {
+        showKeyStatus(provider, 'success', 'API key saved successfully');
+        loadStoredKeysList();
+        loadAIModels(); // Refresh available providers
+        showToast(`${provider} API key saved`, 'success');
+    } else {
+        showKeyStatus(provider, 'error', 'Failed to save API key');
+    }
+}
+
+/**
+ * Clear API key from UI
+ */
+function clearApiKey(provider) {
+    if (removeApiKeyFromStorage(provider)) {
+        document.getElementById(`${provider}ApiKey`).value = '';
+        showKeyStatus(provider, 'info', 'API key cleared');
+        loadStoredKeysList();
+        loadAIModels(); // Refresh available providers
+        showToast(`${provider} API key cleared`, 'info');
+    }
+}
+
+/**
+ * Test API key validity
+ */
+async function testApiKey(provider) {
+    const apiKey = document.getElementById(`${provider}ApiKey`)?.value.trim() || getApiKeyForProvider(provider);
+
+    if (!apiKey) {
+        showKeyStatus(provider, 'error', 'No API key to test');
+        return;
+    }
+
+    showKeyStatus(provider, 'info', 'Testing API key...');
+
+    try {
+        const response = await fetch(`${CONFIG.API_BASE}/ai/test-key`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider, apiKey })
+        });
+
+        const data = await response.json();
+
+        if (data.valid) {
+            showKeyStatus(provider, 'success', `Valid! Key works for ${data.model || provider}`);
+        } else {
+            showKeyStatus(provider, 'error', data.error || 'Invalid API key');
+        }
+    } catch (error) {
+        showKeyStatus(provider, 'error', 'Test failed: ' + error.message);
+    }
+}
+
+/**
+ * Show key status message
+ */
+function showKeyStatus(provider, type, message) {
+    const statusEl = document.getElementById(`${provider}KeyStatus`);
+    if (statusEl) {
+        statusEl.className = `key-status key-status-${type}`;
+        statusEl.innerHTML = `<span class="status-icon">${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span> ${message}`;
+    }
+}
+
+/**
+ * Load stored keys list in settings modal
+ */
+function loadStoredKeysList() {
+    const keys = getStoredApiKeys();
+    const listEl = document.getElementById('storedKeysList');
+
+    if (!listEl) return;
+
+    const providers = Object.entries(keys);
+    if (providers.length === 0) {
+        listEl.innerHTML = '<p class="text-muted">No API keys stored. Add your keys above to enable AI features.</p>';
+        return;
+    }
+
+    const providerNames = {
+        anthropic: 'Anthropic',
+        openai: 'OpenAI',
+        openrouter: 'OpenRouter',
+        groq: 'Groq'
+    };
+
+    listEl.innerHTML = providers.map(([provider, data]) => `
+        <div class="stored-key-item">
+            <span class="stored-key-provider">${providerNames[provider] || provider}</span>
+            <span class="stored-key-masked">${maskApiKey(data.apiKey)}</span>
+            <span class="stored-key-date">${new Date(data.updatedAt).toLocaleDateString()}</span>
+            <button class="btn btn-sm btn-danger" onclick="clearApiKey('${provider}')">Remove</button>
+        </div>
+    `).join('');
+}
+
+/**
+ * Mask API key for display
+ */
+function maskApiKey(key) {
+    if (key.length <= 10) return '••••••••';
+    return key.substring(0, 8) + '••••' + key.substring(key.length - 4);
+}
+
+/**
+ * Show AI Settings modal
+ */
+function showAiSettingsModal() {
+    const modal = document.getElementById('aiSettingsModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+
+        // Load existing keys into inputs
+        const keys = getStoredApiKeys();
+        for (const [provider, data] of Object.entries(keys)) {
+            const input = document.getElementById(`${provider}ApiKey`);
+            const modelSelect = document.getElementById(`${provider}Model`);
+            if (input) input.value = data.apiKey || '';
+            if (modelSelect && data.model) modelSelect.value = data.model;
+        }
+
+        // Load stored keys list
+        loadStoredKeysList();
+    }
+}
+
+/**
+ * Close AI Settings modal
+ */
+function closeAiSettingsModal() {
+    const modal = document.getElementById('aiSettingsModal');
+    if (modal) modal.classList.add('hidden');
+}
+
 // ============================================
 // AI MODEL MANAGEMENT
 // ============================================
@@ -1277,6 +1518,26 @@ function init() {
     $('#voteAbstain').addEventListener('click', () => vote('abstain'));
     $('#sendChat').addEventListener('click', sendChatMessage);
     $('#clearChat').addEventListener('click', clearChat);
+
+    // AI Settings button
+    $('#aiSettingsBtn')?.addEventListener('click', showAiSettingsModal);
+    $('#closeAiSettingsModal')?.addEventListener('click', closeAiSettingsModal);
+    $('#closeAiSettingsFooter')?.addEventListener('click', closeAiSettingsModal);
+
+    // Provider tab switching
+    document.querySelectorAll('.provider-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const provider = tab.dataset.provider;
+
+            // Update tab active state
+            document.querySelectorAll('.provider-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            // Show corresponding panel
+            document.querySelectorAll('.provider-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById(`panel-${provider}`)?.classList.add('active');
+        });
+    });
 
     // Chat input enter key
     $('#chatInput').addEventListener('keydown', (e) => {
